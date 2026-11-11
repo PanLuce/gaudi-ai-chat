@@ -21,6 +21,9 @@ stejná sestava jako v produkci; liší se jen hodnoty v `.env`.
 | `scripts/smoke.sh` | Ověří běžící stack přes porty, které používají lidé. Zdarma. |
 | `scripts/demo-staff.sh` | Ruční ukázka: dočasný účet běžného uživatele — co vidí zaměstnanec (modely, terminál, obrázky); po Enteru se smaže. Zdarma. |
 | `scripts/demo-over-budget.sh` | Ruční ukázka: dočasný účet přes rozpočet, vyzkoušíš v prohlížeči, po Enteru se smaže. Zdarma. |
+| `scripts/backup.sh` | Záloha obou databází a souborů Open WebUI do `backups/<čas>/`, drží posledních 14. |
+| `scripts/restore.sh <adresář>` | Obnova ze zálohy; vše od zálohy se ztratí (ptá se, `--yes` bez ptaní). |
+| `scripts/check-backup-restore.sh` | Ověří, že záloha vrátí smazaný chat, soubor i útratu. **Ne na serveru v provozu** — obnova vrací databáze do okamžiku zálohy. Zdarma. |
 | `scripts/smoke.sh --paid` | Navíc ověří skutečné odpovědi modelů (1 malý placený požadavek na kontrolu). **Musí projít, než službu začne někdo používat.** |
 
 ## Adresy
@@ -72,3 +75,10 @@ WebSockety (streamované odpovědi). Adresa je `WEBUI_URL` v `.env`; bootstrap j
 `open-terminal` je shell na serveru. Bootstrap ho připojí do Open WebUI (adresa a klíč z `.env`); nové
 připojení nemá žádná pravidla přístupu, což Open WebUI chápe jako „jen admin“. Kdo další ho smí používat,
 je konfigurace admina v UI a bootstrap ji nepřepisuje. Co vidí běžný uživatel: `scripts/demo-staff.sh`.
+
+## Zálohy
+
+`scripts/backup.sh` uloží dump databází `openwebui` a `litellm` a soubory Open WebUI (nahrané soubory,
+vektorový index; bez `cache/` se staženými modely) do `backups/<čas>/` (jen pro vlastníka, mimo git).
+`.env` v záloze není — kopie patří do správce hesel, obnova na jiném serveru ji potřebuje.
+Na serveru: denně z cronu a kopie mimo server (krok nasazení).

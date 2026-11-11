@@ -115,3 +115,12 @@ wait_until_demo_is_done() {
   read -r -p "Press Enter when done (the account is then deleted)… " _
   info "deleting the demo account"
 }
+
+# Each application has a database and a login role of the same name (postgres/ensure-databases.sh).
+readonly APP_DATABASES="litellm openwebui"
+# Open WebUI's own files: uploads and the vector index. cache/ (downloaded models) is re-created on start.
+readonly OPENWEBUI_VOLUME="open-webui-data"
+
+compose_volume_name() { compose config --format json | jq -er --arg v "$1" '.volumes[$v].name'; }
+# Backup and restore use the postgres image for tar, so they need no extra image.
+tools_image() { compose config --format json | jq -er '.services.postgres.image'; }
