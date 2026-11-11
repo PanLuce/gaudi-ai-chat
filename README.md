@@ -19,6 +19,7 @@ stejná sestava jako v produkci; liší se jen hodnoty v `.env`.
 |---|---|
 | `scripts/bootstrap.sh` | Uvede stack do nakonfigurovaného stavu; lze spouštět opakovaně. |
 | `scripts/smoke.sh` | Ověří běžící stack přes porty, které používají lidé. Zdarma. |
+| `scripts/demo-over-budget.sh` | Ruční ukázka: dočasný účet přes rozpočet, vyzkoušíš v prohlížeči, po Enteru se smaže. Zdarma. |
 | `scripts/smoke.sh --paid` | Navíc ověří skutečné odpovědi modelů (1 malý placený požadavek na kontrolu). **Musí projít, než službu začne někdo používat.** |
 
 ## Adresy
@@ -35,10 +36,12 @@ stejná sestava jako v produkci; liší se jen hodnoty v `.env`.
 
 ## Modely
 
-`claude-haiku` (výchozí), `claude-sonnet`, `claude-opus` — mapování v `litellm/config.yaml`,
-názvy a pořadí v Open WebUI v `scripts/bootstrap.sh` (`STAFF_TEXT_MODELS`). Bootstrap je zveřejní všem
-přihlášeným; bez toho by je Open WebUI ukázalo jen adminům. Tyto tři modely spravuje **jen bootstrap** —
-úpravy v UI (popis, ikona, systémový prompt) další běh přepíše; měň je v `STAFF_TEXT_MODELS`.
+`claude-haiku`, `claude-sonnet`, `claude-opus`, `gemini-image` — mapování v `litellm/config.yaml`.
+Kdo který model vidí, jak se jmenuje a který je výchozí, je **konfigurace admina v UI** (Admin → Models).
+Bootstrap jen při prvním startu založí výchozí stav (`INITIAL_MODELS` v `scripts/bootstrap.sh`): Haiku
+(výchozí) a Sonnet pro všechny, Opus a Gemini jen pro admina. Existující nastavení nikdy nepřepíše.
+Bez záznamu by Open WebUI model ukázalo jen adminům. Tlačítko obrázku funguje s kterýmkoli chat modelem;
+`gemini-image` proto nemusí být ve výběru vidět.
 
 ## Obrázky
 

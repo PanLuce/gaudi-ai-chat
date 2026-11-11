@@ -11,14 +11,16 @@ set -euo pipefail
 readonly OPENWEBUI_KEY_MONTHLY_BUDGET_USD=100
 readonly OPENWEBUI_KEY_ALIAS="open-webui"
 
-# Text models every staff member may use, in menu order: "<LiteLLM model name>|<name shown in Open WebUI>".
-# The first one is the default.
 readonly IMAGE_MODEL="gemini-image"
 
-readonly STAFF_TEXT_MODELS=(
-  "claude-haiku|Claude Haiku (rychlý, výchozí)"
-  "claude-sonnet|Claude Sonnet"
-  "claude-opus|Claude Opus (nejsilnější)"
+# Initial model setup in Open WebUI: "<LiteLLM model name>|<name shown>|<who sees it: all or admin>".
+# Applied only when a model has no entry yet; afterwards visibility, names and the default model
+# are the admin's configuration in the UI and bootstrap leaves them alone. The first one is the default.
+readonly INITIAL_MODELS=(
+  "claude-haiku|Claude Haiku (rychlý, výchozí)|all"
+  "claude-sonnet|Claude Sonnet|all"
+  "claude-opus|Claude Opus (nejsilnější)|admin"
+  "gemini-image|Gemini obrázky (pro tlačítko obrázku)|admin"
 )
 
 ensure_secret() {
@@ -77,40 +79,37 @@ ensure_staff_budget() {
 }
 
 # Open WebUI shows a connection model only to admins until it has its own entry with access rules.
-# Sets a model's display name and its access rules to exactly the given grants.
-# /model/update ignores grants, so they are always written through /model/access/update.
-ensure_model_entry() {
-  local id=$1 name=$2 grants=$3 form path=/api/v1/models/create
-  form=$(jq -cn --arg id "$id" --arg name "$name" '{id: $id, base_model_id: null, name: $name, meta: {}, params: {}}')
-  if openwebui_admin GET "/api/v1/models/model?id=$id" 2>/dev/null | jq -e '.id' >/dev/null; then
-    path=/api/v1/models/model/update
-  fi
-  openwebui_admin POST "$path" "$form" >/dev/null || fail "could not set name of model $id"
+model_entry_exists() {
+  openwebui_admin GET "/api/v1/models/model?id=$1" 2>/dev/null | jq -e '.id' >/dev/null
+}
+
+# Creates the model's entry with its initial name and visibility; existing entries are left as they are.
+seed_model_entry() {
+  local id=$1 name=$2 audience=$3 grants='[]'
+  model_entry_exists "$id" && return 0
+  [ "$audience" = "all" ] && grants='[{"principal_type": "user", "principal_id": "*", "permission": "read"}]'
   openwebui_admin POST /api/v1/models/model/access/update \
     "$(jq -cn --arg id "$id" --arg name "$name" --argjson grants "$grants" '{id: $id, name: $name, access_grants: $grants}')" \
-    >/dev/null || fail "could not set access rules of model $id"
+    >/dev/null || fail "could not create model entry $id"
+  info "model $id created (visible to: $audience)"
 }
 
-ensure_staff_model() {
-  ensure_model_entry "$1" "$2" '[{"principal_type": "user", "principal_id": "*", "permission": "read"}]'
-}
-
-# The image model is used by the image button only; as a chat model it would just fail.
-ensure_image_model_hidden_from_chat() {
-  ensure_model_entry "$IMAGE_MODEL" "Gemini obrázky (jen pro tlačítko obrázku)" '[]'
-}
-
-ensure_staff_models() {
-  local entry ids=()
-  for entry in "${STAFF_TEXT_MODELS[@]}"; do
-    ensure_staff_model "${entry%%|*}" "${entry#*|}"
-    ids+=("${entry%%|*}")
-  done
-  openwebui_admin GET /api/v1/configs/models \
-    | jq -c --arg default "${ids[0]}" --args '.DEFAULT_MODELS = $default | .MODEL_ORDER_LIST = $ARGS.positional' "${ids[@]}" \
-    | { read -r config; openwebui_admin POST /api/v1/configs/models "$config" >/dev/null; } \
+seed_default_model() {
+  local default=$1 config
+  config=$(openwebui_admin GET /api/v1/configs/models) || fail "could not read model settings"
+  [ -n "$(jq -r '.DEFAULT_MODELS // empty' <<<"$config")" ] && return 0
+  openwebui_admin POST /api/v1/configs/models "$(jq -c --arg d "$default" '.DEFAULT_MODELS = $d' <<<"$config")" >/dev/null \
     || fail "could not set default model"
-  info "staff models: ${ids[*]} (default ${ids[0]})"
+  info "default model: $default"
+}
+
+seed_models() {
+  local entry id rest name audience
+  for entry in "${INITIAL_MODELS[@]}"; do
+    id=${entry%%|*}; rest=${entry#*|}; name=${rest%%|*}; audience=${rest#*|}
+    seed_model_entry "$id" "$name" "$audience"
+  done
+  seed_default_model "${INITIAL_MODELS[0]%%|*}"
 }
 
 # Image generation goes through LiteLLM too, so images count against the same budgets.
@@ -146,8 +145,7 @@ main() {
   ensure_staff_budget
   sync_openwebui_connection
   if [ -n "${OPENWEBUI_ADMIN_API_KEY:-}" ]; then
-    ensure_staff_models
-    ensure_image_model_hidden_from_chat
+    seed_models
     sync_openwebui_image_generation
   fi
   pass "bootstrap done"

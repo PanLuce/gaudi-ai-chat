@@ -49,13 +49,16 @@ check_openwebui_offers_claude_models() {
   pass "Open WebUI offers $EXPECTED_TEXT_MODELS"
 }
 
-# Open WebUI hides models without access rules from regular users, so check as one of them.
-check_staff_member_sees_claude_models() {
-  local offered
+# Which models staff see is the admin's configuration; only the default one must be there,
+# otherwise nobody can chat. Checked as a regular user, since admins see every model.
+check_staff_member_sees_default_model() {
+  local default offered
+  default=$(openwebui_admin GET /api/v1/configs/models | jq -r '.DEFAULT_MODELS // empty' | cut -d, -f1)
+  [ -n "$default" ] || fail "Open WebUI has no default model"
   create_temporary_staff_user "$(unique_smoke_email)"
-  offered=$(api_request "$TEMP_USER_TOKEN" GET "$OPENWEBUI_URL/api/models" | jq -r '.data[].id' | sort | xargs)
-  [ "$offered" = "$EXPECTED_TEXT_MODELS" ] || fail "a staff member sees [$offered], expected [$EXPECTED_TEXT_MODELS]"
-  pass "a staff member sees $EXPECTED_TEXT_MODELS"
+  offered=$(api_request "$TEMP_USER_TOKEN" GET "$OPENWEBUI_URL/api/models" | jq -r '.data[].id' | xargs)
+  grep -qw -- "$default" <<<"$offered" || fail "a staff member cannot use the default model $default (sees: $offered)"
+  pass "a staff member can use the default model $default"
 }
 
 check_openwebui_generates_images_through_litellm() {
@@ -136,7 +139,7 @@ run_free_checks() {
   check_openwebui_stores_data_in_postgres
   check_openwebui_has_fixed_secret_key
   check_openwebui_offers_claude_models
-  check_staff_member_sees_claude_models
+  check_staff_member_sees_default_model
   check_openwebui_generates_images_through_litellm
   check_default_staff_budget
   check_overspent_user_is_blocked_in_openwebui
