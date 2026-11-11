@@ -7,6 +7,9 @@ set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
 readonly EXPECTED_TEXT_MODELS="claude-haiku claude-opus claude-sonnet"
+readonly IMAGE_MODEL="gemini-image"
+readonly SMALL_CHAT='{"model":"claude-haiku","stream":false,"max_tokens":5,"messages":[{"role":"user","content":"ahoj"}]}'
+readonly SMALL_IMAGE='{"prompt":"a small red apple on a white table"}'
 
 readonly ONE_SHOT_SERVICES="db-init"
 
@@ -50,9 +53,18 @@ check_openwebui_offers_claude_models() {
 check_staff_member_sees_claude_models() {
   local offered
   create_temporary_staff_user "$(unique_smoke_email)"
-  offered=$(api_request "$TEMP_USER_TOKEN" GET "$OPENWEBUI_URL/api/models" | jq -r '.data[].id' | grep '^claude-' | sort | xargs)
+  offered=$(api_request "$TEMP_USER_TOKEN" GET "$OPENWEBUI_URL/api/models" | jq -r '.data[].id' | sort | xargs)
   [ "$offered" = "$EXPECTED_TEXT_MODELS" ] || fail "a staff member sees [$offered], expected [$EXPECTED_TEXT_MODELS]"
   pass "a staff member sees $EXPECTED_TEXT_MODELS"
+}
+
+check_openwebui_generates_images_through_litellm() {
+  local config
+  config=$(openwebui_admin GET /api/v1/images/config | jq -c \
+    '{ENABLE_IMAGE_GENERATION, IMAGE_GENERATION_ENGINE, IMAGES_OPENAI_API_BASE_URL, IMAGE_GENERATION_MODEL}')
+  [ "$config" = '{"ENABLE_IMAGE_GENERATION":true,"IMAGE_GENERATION_ENGINE":"openai","IMAGES_OPENAI_API_BASE_URL":"http://litellm:4000/v1","IMAGE_GENERATION_MODEL":"gemini-image"}' ] \
+    || fail "Open WebUI image generation is $config"
+  pass "Open WebUI generates images with $IMAGE_MODEL through LiteLLM"
 }
 
 check_default_staff_budget() {
@@ -69,18 +81,42 @@ check_overspent_user_is_blocked_in_openwebui() {
   local email response
   email=$(unique_smoke_email)
   create_temporary_staff_user "$email"
-  litellm_admin POST /customer/new "$(jq -n --arg e "$email" '{user_id: $e, spend: 6}')" >/dev/null
-  on_exit_cleanup litellm_admin POST /customer/delete "'$(jq -cn --arg e "$email" '{user_ids: [$e]}')'"
-  assert_chat_blocked_by_budget '{"model":"claude-haiku","stream":false,"max_tokens":5,"messages":[{"role":"user","content":"ahoj"}]}'
+  create_temporary_customer "$email" 6
+  assert_blocked_by_budget /api/chat/completions "$SMALL_CHAT"
   pass "a user over budget is blocked in Open WebUI"
   # A custom "user" parameter (allowed in chat settings) must not move spend to another identity.
-  assert_chat_blocked_by_budget '{"model":"claude-haiku","stream":false,"max_tokens":5,"user":"someone-else@skolagaudi.cz","messages":[{"role":"user","content":"ahoj"}]}'
+  assert_blocked_by_budget /api/chat/completions "$(jq -c '.user = "someone-else@skolagaudi.cz"' <<<"$SMALL_CHAT")"
   pass "the budget cannot be dodged with a custom 'user' parameter"
+  assert_image_blocked_by_budget "$email"
+  pass "a user over budget cannot generate images either"
 }
 
-assert_chat_blocked_by_budget() {
-  local request=$1 response
-  response=$(api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL/api/chat/completions" "$request" 2>/dev/null || true)
+# Open WebUI hides the reason of a failed image request, so read it from LiteLLM's request log.
+# Cost note: free only while the budget check works; if it broke for images alone, this would buy
+# one image (~0.045 USD). The chat checks above run first and stop the run on a general budget failure.
+assert_image_blocked_by_budget() {
+  local email=$1 attempt
+  ! api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL/api/v1/images/generations" "$SMALL_IMAGE" >/dev/null 2>&1 \
+    || fail "overspent user got an image"
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do # LiteLLM writes its request log asynchronously
+    image_refused_for_budget "$email" && return 0
+    sleep 2
+  done
+  fail "image request of overspent user was not refused by the budget check"
+}
+
+image_refused_for_budget() {
+  local today
+  today=$(date -u +%Y-%m-%d)
+  litellm_admin GET "/spend/logs/v2?start_date=$today&end_date=$(date -u -v+1d +%Y-%m-%d 2>/dev/null || date -u -d tomorrow +%Y-%m-%d)&page_size=100" \
+    | jq -e --arg e "$1" --arg m "$IMAGE_MODEL" 'any(.data[]; .end_user == $e and .model_group == $m
+        and .status == "failure" and .spend == 0
+        and ((.metadata.error_information.error_message // "") | contains("ExceededBudget")))' >/dev/null
+}
+
+assert_blocked_by_budget() {
+  local path=$1 request=$2 response
+  response=$(api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL$path" "$request" 2>/dev/null || true)
   grep -q "ExceededBudget" <<<"$response" \
     || fail "overspent user was not blocked by budget: $(head -c 300 <<<"$response")"
 }
@@ -101,6 +137,7 @@ run_free_checks() {
   check_openwebui_has_fixed_secret_key
   check_openwebui_offers_claude_models
   check_staff_member_sees_claude_models
+  check_openwebui_generates_images_through_litellm
   check_default_staff_budget
   check_overspent_user_is_blocked_in_openwebui
 }
@@ -110,7 +147,7 @@ check_spend_is_charged_to_the_staff_member() {
   local email spend
   email=$(unique_smoke_email)
   create_temporary_staff_user "$email"
-  on_exit_cleanup litellm_admin POST /customer/delete "'$(jq -cn --arg e "$email" '{user_ids: [$e]}')'"
+  on_exit_cleanup delete_litellm_customer "$email"
   api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL/api/chat/completions" \
     '{"model":"claude-haiku","stream":false,"max_tokens":5,"messages":[{"role":"user","content":"ahoj"}]}' >/dev/null \
     || fail "staff member's request failed"
@@ -120,9 +157,20 @@ check_spend_is_charged_to_the_staff_member() {
   pass "spend is charged to the staff member ($spend USD)"
 }
 
+# Paid (~0.045 USD): a staff member gets a real image.
+check_staff_member_gets_an_image() {
+  local response
+  create_temporary_staff_user "$(unique_smoke_email)"
+  response=$(api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL/api/v1/images/generations" "$SMALL_IMAGE") \
+    || fail "image generation failed: $(head -c 300 <<<"$response")"
+  jq -e '.[0].url' <<<"$response" >/dev/null || fail "no image in response: $(head -c 300 <<<"$response")"
+  pass "a staff member gets an image from $IMAGE_MODEL"
+}
+
 run_paid_checks() {
   check_haiku_answers_in_openwebui
   check_spend_is_charged_to_the_staff_member
+  check_staff_member_gets_an_image
 }
 
 main() {

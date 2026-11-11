@@ -57,6 +57,13 @@ services:
       OPENAI_API_BASE_URL: http://litellm:4000/v1
       # Sends X-OpenWebUI-User-Email etc., which LiteLLM uses to charge each person's budget.
       ENABLE_FORWARD_USER_INFO_HEADERS: "true"
+      # Seeds a fresh database; scripts/bootstrap.sh keeps the image settings in sync.
+      ENABLE_IMAGE_GENERATION: "true"
+      IMAGE_GENERATION_ENGINE: openai
+      IMAGES_OPENAI_API_BASE_URL: http://litellm:4000/v1
+      IMAGES_OPENAI_API_KEY: ${OPENWEBUI_LITELLM_KEY:-}
+      IMAGE_GENERATION_MODEL: gemini-image
+      IMAGE_SIZE: 1024x1024
       # Seeds the connection on a fresh database only; afterwards scripts/bootstrap.sh keeps it in sync.
       OPENAI_API_KEY: ${OPENWEBUI_LITELLM_KEY:-}
       ANONYMIZED_TELEMETRY: "false"
@@ -93,6 +100,7 @@ services:
       UI_USERNAME: admin
       UI_PASSWORD: ${LITELLM_UI_PASSWORD:?run scripts/bootstrap.sh}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?set GEMINI_API_KEY in .env}
     volumes:
       - ./litellm/config.yaml:/app/config.yaml:ro
     depends_on:

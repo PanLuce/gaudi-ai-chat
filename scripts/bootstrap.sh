@@ -13,6 +13,8 @@ readonly OPENWEBUI_KEY_ALIAS="open-webui"
 
 # Text models every staff member may use, in menu order: "<LiteLLM model name>|<name shown in Open WebUI>".
 # The first one is the default.
+readonly IMAGE_MODEL="gemini-image"
+
 readonly STAFF_TEXT_MODELS=(
   "claude-haiku|Claude Haiku (rychlý, výchozí)"
   "claude-sonnet|Claude Sonnet"
@@ -99,6 +101,18 @@ ensure_staff_models() {
   info "staff models: ${ids[*]} (default ${ids[0]})"
 }
 
+# Image generation goes through LiteLLM too, so images count against the same budgets.
+sync_openwebui_image_generation() {
+  openwebui_admin GET /api/v1/images/config \
+    | jq -c --arg key "$OPENWEBUI_LITELLM_KEY" --arg model "$IMAGE_MODEL" '
+        .ENABLE_IMAGE_GENERATION = true | .IMAGE_GENERATION_ENGINE = "openai"
+        | .IMAGES_OPENAI_API_BASE_URL = "http://litellm:4000/v1" | .IMAGES_OPENAI_API_KEY = $key
+        | .IMAGE_GENERATION_MODEL = $model | .IMAGE_SIZE = "1024x1024"' \
+    | { read -r config; openwebui_admin POST /api/v1/images/config/update "$config" >/dev/null; } \
+    || fail "could not configure image generation"
+  info "image generation: $IMAGE_MODEL through LiteLLM"
+}
+
 sync_openwebui_connection() {
   if [ -z "${OPENWEBUI_ADMIN_API_KEY:-}" ]; then
     info "skipped Open WebUI connection sync: OPENWEBUI_ADMIN_API_KEY not set (see README)"
@@ -119,7 +133,10 @@ main() {
   ensure_openwebui_litellm_key
   ensure_staff_budget
   sync_openwebui_connection
-  [ -n "${OPENWEBUI_ADMIN_API_KEY:-}" ] && ensure_staff_models
+  if [ -n "${OPENWEBUI_ADMIN_API_KEY:-}" ]; then
+    ensure_staff_models
+    sync_openwebui_image_generation
+  fi
   pass "bootstrap done"
 }
 

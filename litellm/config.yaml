@@ -13,6 +13,13 @@ model_list:
     litellm_params:
       model: anthropic/claude-opus-5-5
       api_key: os.environ/ANTHROPIC_API_KEY
+  # Images for Open WebUI's image button; Gemini API must be on the paid tier (no training on our data).
+  - model_name: gemini-image
+    litellm_params:
+      model: gemini/gemini-3.1-flash-image
+      api_key: os.environ/GEMINI_API_KEY
+    model_info:
+      mode: image_generation
 
 litellm_settings:
   # Budget every staff member gets unless set otherwise; created by scripts/bootstrap.sh.

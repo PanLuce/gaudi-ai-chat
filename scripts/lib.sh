@@ -66,6 +66,24 @@ run_cleanup() {
 }
 trap run_cleanup EXIT
 
+# LiteLLM writes request logs asynchronously and re-creates the customer row when it does,
+# so delete, wait for pending writes, then delete again.
+delete_litellm_customer() {
+  local body
+  body=$(jq -cn --arg e "$1" '{user_ids: [$e]}')
+  litellm_admin POST /customer/delete "$body" >/dev/null 2>&1 || true
+  sleep 5
+  litellm_admin POST /customer/delete "$body" >/dev/null 2>&1 || true
+}
+
+# Creates a LiteLLM customer with the given spend, deleted on exit.
+create_temporary_customer() {
+  local email=$1 spend=$2
+  litellm_admin POST /customer/new "$(jq -n --arg e "$email" --argjson s "$spend" '{user_id: $e, spend: $s}')" >/dev/null \
+    || fail "could not create customer $email"
+  on_exit_cleanup delete_litellm_customer "$email"
+}
+
 unique_smoke_email() { echo "smoke-$(date +%s)-$RANDOM@skolagaudi.cz"; }
 
 # Creates a regular Open WebUI user, deleted on exit, and signs it in: sets TEMP_USER_TOKEN.
