@@ -8,6 +8,7 @@ Open WebUI + LiteLLM + Postgres stack for Škola Gaudi staff. See README.md for 
 - Every provider call goes through LiteLLM; Open WebUI never talks to a provider directly.
 - The Anthropic key must be created inside the `openwebui` workspace in console.anthropic.com: keys outside a workspace are rejected (LiteLLM sends no `anthropic-workspace-id`), and the workspace carries the provider-side spend limit.
 - Open WebUI stores its config in its database after the first start, so env vars only seed a fresh database. Change live settings through `scripts/bootstrap.sh` (admin API), not by editing `docker-compose.yml` alone.
+- Access rules: a model's grants change only through `/api/v1/models/model/access/update` (`/model/update` ignores them); a terminal's live in its connection's `config.access_grants` (`/api/v1/configs/terminal_servers`), where no grants means admins only. Grant `user:*` = all signed-in people; `anyone:*` = public without login — never use it.
 
 ## Running things
 - Verify with `scripts/smoke.sh` after every change; add a failing check first, then the change.
