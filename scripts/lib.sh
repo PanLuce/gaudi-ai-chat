@@ -4,7 +4,6 @@
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$REPO_ROOT/.env"
 LITELLM_URL="http://127.0.0.1:4000"
-OPENWEBUI_URL="${OPENWEBUI_URL:-http://127.0.0.1:3000}"
 
 # Default monthly budget of every staff member; litellm/config.yaml refers to it by id.
 readonly STAFF_BUDGET_ID="staff-monthly"
@@ -27,6 +26,8 @@ load_env() {
   # shellcheck disable=SC1090
   . "$ENV_FILE"
   set +a
+  # Scripts go the way people do: through Caddy at the public address.
+  OPENWEBUI_URL="${WEBUI_URL:-http://localhost}"
 }
 
 compose() { docker compose --project-directory "$REPO_ROOT" "$@"; }

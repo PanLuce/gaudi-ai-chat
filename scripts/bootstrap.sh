@@ -124,6 +124,17 @@ sync_openwebui_image_generation() {
   info "image generation: $IMAGE_MODEL through LiteLLM"
 }
 
+# The public address is part of the deployment (.env), not an admin setting: OAuth redirects use it.
+# MFA fields are left out: only a signed-in administrator may change them, not an API key,
+# and Open WebUI keeps them as they are when they are not sent.
+sync_openwebui_public_address() {
+  openwebui_admin GET /api/v1/auths/admin/config \
+    | jq -c --arg url "$OPENWEBUI_URL" '.WEBUI_URL = $url | with_entries(select(.key | test("MFA") | not))' \
+    | { read -r config; openwebui_admin POST /api/v1/auths/admin/config "$config" >/dev/null; } \
+    || fail "could not set Open WebUI's public address"
+  info "Open WebUI public address: $OPENWEBUI_URL"
+}
+
 sync_openwebui_connection() {
   if [ -z "${OPENWEBUI_ADMIN_API_KEY:-}" ]; then
     info "skipped Open WebUI connection sync: OPENWEBUI_ADMIN_API_KEY not set (see README)"
@@ -147,6 +158,7 @@ main() {
   if [ -n "${OPENWEBUI_ADMIN_API_KEY:-}" ]; then
     seed_models
     sync_openwebui_image_generation
+    sync_openwebui_public_address
   fi
   pass "bootstrap done"
 }

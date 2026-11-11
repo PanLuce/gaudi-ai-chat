@@ -7,6 +7,32 @@ x-logging: &default-logging
     max-file: "3"
 
 services:
+  # The only service people reach. Locally bound to 127.0.0.1; on the server PUBLIC_BIND_ADDRESS=0.0.0.0.
+  caddy:
+    image: caddy:2.11.6-alpine
+    ports:
+      - "${PUBLIC_BIND_ADDRESS:-127.0.0.1}:80:80"
+      - "${PUBLIC_BIND_ADDRESS:-127.0.0.1}:443:443"
+      - "${PUBLIC_BIND_ADDRESS:-127.0.0.1}:443:443/udp"
+    environment:
+      WEBUI_URL: ${WEBUI_URL:-http://localhost}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      open-webui:
+        condition: service_healthy
+    healthcheck:
+      # Caddy's admin endpoint answers regardless of the site address.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    mem_limit: 256m
+    logging: *default-logging
+    restart: unless-stopped
+
   postgres:
     image: postgres:18.1-alpine
     environment:
@@ -42,13 +68,15 @@ services:
 
   open-webui:
     image: ghcr.io/open-webui/open-webui:0.13.3
-    ports:
-      - "127.0.0.1:3000:8080"
+    # No published port: people reach it only through caddy.
+    expose:
+      - "8080"
     environment:
       DATABASE_URL: postgresql://openwebui:${OPENWEBUI_DB_PASSWORD:?run scripts/bootstrap.sh}@postgres:5432/openwebui
       # Fixed key: sessions survive container recreation (upgrades).
       WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?run scripts/bootstrap.sh}
-      WEBUI_URL: ${WEBUI_URL:-http://localhost:3000}
+      # Seeds a fresh database; scripts/bootstrap.sh keeps it in sync with .env.
+      WEBUI_URL: ${WEBUI_URL:-http://localhost}
       DEFAULT_LOCALE: cs-CZ
       # Admins see usage analytics, not the content of staff conversations.
       ENABLE_ADMIN_CHAT_ACCESS: "false"
@@ -135,5 +163,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  caddy-data: # certificates in production
+  caddy-config:
   open-webui-data:
   postgres-data:

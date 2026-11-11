@@ -12,6 +12,8 @@ readonly SMALL_CHAT='{"model":"claude-haiku","stream":false,"max_tokens":5,"mess
 readonly SMALL_IMAGE='{"prompt":"a small red apple on a white table"}'
 
 readonly ONE_SHOT_SERVICES="db-init"
+# Where Open WebUI was published before Caddy became the only entry.
+readonly FORMER_DIRECT_OPENWEBUI_URL="http://127.0.0.1:3000"
 
 # Checks every long-running service the compose file defines, so a stopped one fails too.
 check_all_services_healthy() {
@@ -23,6 +25,40 @@ check_all_services_healthy() {
   done
   [ -z "$unhealthy" ] || fail "services not healthy:$unhealthy"
   pass "all services healthy"
+}
+
+# Caddy is the only way in: it adds the security headers, so their presence proves the route.
+check_openwebui_is_served_through_caddy() {
+  local headers
+  headers=$(curl -sS -o /dev/null -D - --max-time 10 "$OPENWEBUI_URL/health" 2>/dev/null || true)
+  grep -q '^HTTP/[0-9.]* 200' <<<"$headers" || fail "Open WebUI is not reachable at $OPENWEBUI_URL"
+  grep -qi '^x-content-type-options: nosniff' <<<"$headers" || fail "$OPENWEBUI_URL is not served through Caddy (no security headers)"
+  pass "Open WebUI is served through Caddy at $OPENWEBUI_URL"
+}
+
+# Chat answers stream over a WebSocket; the proxy must pass the upgrade through.
+check_websocket_passes_through_caddy() {
+  local status
+  status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 \
+    -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
+    -H "Sec-WebSocket-Key: $(openssl rand -base64 16)" \
+    "$OPENWEBUI_URL/ws/socket.io/?EIO=4&transport=websocket" 2>/dev/null || true)
+  [ "$status" = "101" ] || fail "WebSocket upgrade through $OPENWEBUI_URL returned $status, expected 101"
+  pass "chat streaming (WebSocket) passes through Caddy"
+}
+
+check_openwebui_is_not_reachable_directly() {
+  ! curl -s -o /dev/null --max-time 3 "$FORMER_DIRECT_OPENWEBUI_URL/health" \
+    || fail "Open WebUI is still reachable past Caddy at $FORMER_DIRECT_OPENWEBUI_URL"
+  pass "Open WebUI is not reachable past Caddy"
+}
+
+# Links in e-mails and OAuth redirects are built from this address.
+check_openwebui_knows_its_public_address() {
+  local configured
+  configured=$(openwebui_admin GET /api/v1/auths/admin/config | jq -r '.WEBUI_URL')
+  [ "$configured" = "$OPENWEBUI_URL" ] || fail "Open WebUI thinks its address is $configured, expected $OPENWEBUI_URL"
+  pass "Open WebUI knows its public address $OPENWEBUI_URL"
 }
 
 check_openwebui_stores_data_in_postgres() {
@@ -136,6 +172,10 @@ check_haiku_answers_in_openwebui() {
 
 run_free_checks() {
   check_all_services_healthy
+  check_openwebui_is_served_through_caddy
+  check_websocket_passes_through_caddy
+  check_openwebui_is_not_reachable_directly
+  check_openwebui_knows_its_public_address
   check_openwebui_stores_data_in_postgres
   check_openwebui_has_fixed_secret_key
   check_openwebui_offers_claude_models
@@ -182,7 +222,7 @@ run_paid_checks() {
 }
 
 main() {
-  require_tools docker curl jq
+  require_tools docker curl jq openssl
   load_env
   run_free_checks
   case "${1:-}" in

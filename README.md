@@ -1,13 +1,13 @@
 # Open WebUI pro Školu Gaudi
 
-AI chat pro zaměstnance: Open WebUI → LiteLLM (rozpočty, útrata) → Anthropic. Lokálně běží
+AI chat pro zaměstnance: Caddy → Open WebUI → LiteLLM (rozpočty, útrata) → Anthropic / Gemini. Lokálně běží
 stejná sestava jako v produkci; liší se jen hodnoty v `.env`.
 
 ## Spuštění
 
 1. `cp .env.example .env` a vyplň `LITELLM_MASTER_KEY`, `OPEN_TERMINAL_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`.
 2. `scripts/bootstrap.sh` — vygeneruje chybějící hesla, spustí stack, založí klíč Open WebUI v LiteLLM.
-3. Otevři `http://localhost:3000`, zaregistruj se (první účet je admin). Rozhraní je česky; pokud
+3. Otevři `http://localhost`, zaregistruj se (první účet je admin). Rozhraní je česky; pokud
    prohlížeč pamatuje jiný jazyk z dřívějška, přepni ho v Nastavení → Obecné → Jazyk.
 4. **Admin API key:** Nastavení → Účet → API klíče → vytvořit, uložit do `.env` jako
    `OPENWEBUI_ADMIN_API_KEY`. Nová databáze = nový klíč.
@@ -26,7 +26,7 @@ stejná sestava jako v produkci; liší se jen hodnoty v `.env`.
 
 | Co | Kde |
 |---|---|
-| Open WebUI | `http://localhost:3000` |
+| Open WebUI (přes Caddy) | `http://localhost` — jediný vstup; Open WebUI samo žádný port na hostu nemá |
 | LiteLLM admin UI (útrata, klíče) | `http://127.0.0.1:4000/ui`, uživatel `admin`, heslo `LITELLM_UI_PASSWORD` v `.env` |
 
 ## Dokumenty
@@ -57,3 +57,11 @@ chybu „Unprocessable Content“ — Open WebUI důvod u obrázků neukazuje; d
   Útrata a rozpočty lidí: LiteLLM UI → *Customers*.
 - **Celá instance:** klíč Open WebUI v LiteLLM má strop $100 / 30 dní.
 - **U poskytovatele:** měsíční limit workspace `openwebui` v console.anthropic.com.
+
+## Vstup (Caddy)
+
+Lidé přicházejí jen přes Caddy (`caddy/Caddyfile`), který přidává bezpečnostní hlavičky a předává
+WebSockety (streamované odpovědi). Adresa je `WEBUI_URL` v `.env`; bootstrap ji zapíše i do Open WebUI
+(odkazy, přesměrování Google přihlášení). Na serveru se mění jen `.env`:
+`WEBUI_URL=https://ai.skolagaudi.cz` (Caddy si sám vyřídí certifikát Let's Encrypt) a
+`PUBLIC_BIND_ADDRESS=0.0.0.0`.
