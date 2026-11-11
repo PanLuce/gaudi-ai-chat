@@ -18,6 +18,9 @@ main_check() {
     grep -q "^$name=[0-9a-f]\{48\}$" "$ENV_FILE" || fail "$name was not generated"
   done
   pass "a fresh .env from .env.example gets every generated secret"
+  # Before the first admin exists there can be no admin key; a placeholder would make bootstrap use it.
+  grep -q '^OPENWEBUI_ADMIN_API_KEY=$' "$ENV_FILE" || fail ".env.example must leave OPENWEBUI_ADMIN_API_KEY empty"
+  pass "a fresh .env has no admin key yet, so bootstrap skips the admin steps"
 }
 
 main_check "$@"
