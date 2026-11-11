@@ -23,3 +23,4 @@ SQL
 }
 
 ensure_database litellm "$LITELLM_DB_PASSWORD"
+ensure_database openwebui "$OPENWEBUI_DB_PASSWORD"

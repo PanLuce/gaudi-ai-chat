@@ -30,11 +30,13 @@ ensure_secrets() {
   ensure_secret POSTGRES_PASSWORD
   ensure_secret LITELLM_DB_PASSWORD
   ensure_secret LITELLM_UI_PASSWORD
+  ensure_secret OPENWEBUI_DB_PASSWORD
+  ensure_secret WEBUI_SECRET_KEY
 }
 
 openwebui_key_is_valid() {
   [ -n "${OPENWEBUI_LITELLM_KEY:-}" ] &&
-    litellm_admin GET "/key/info?key=$OPENWEBUI_LITELLM_KEY" >/dev/null 2>&1
+    litellm_as "$OPENWEBUI_LITELLM_KEY" GET /key/info >/dev/null 2>&1
 }
 
 ensure_openwebui_litellm_key() {
@@ -58,7 +60,7 @@ sync_openwebui_connection() {
   fi
   openwebui_admin POST /openai/config/update "$(jq -n --arg key "$OPENWEBUI_LITELLM_KEY" \
     '{ENABLE_OPENAI_API: true, OPENAI_API_BASE_URLS: ["http://litellm:4000/v1"], OPENAI_API_KEYS: [$key], OPENAI_API_CONFIGS: {}}')" \
-    >/dev/null || fail "could not update Open WebUI's connection"
+    >/dev/null || fail "could not update Open WebUI's connection: is OPENWEBUI_ADMIN_API_KEY valid? A fresh database needs a new one (README: Admin API key)"
   info "Open WebUI connection points at LiteLLM with its own key"
 }
 

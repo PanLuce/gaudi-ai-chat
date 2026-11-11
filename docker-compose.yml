@@ -31,6 +31,7 @@ services:
       PGUSER: postgres
       PGPASSWORD: ${POSTGRES_PASSWORD:?run scripts/bootstrap.sh}
       LITELLM_DB_PASSWORD: ${LITELLM_DB_PASSWORD:?run scripts/bootstrap.sh}
+      OPENWEBUI_DB_PASSWORD: ${OPENWEBUI_DB_PASSWORD:?run scripts/bootstrap.sh}
     volumes:
       - ./postgres/ensure-databases.sh:/ensure-databases.sh:ro
     depends_on:
@@ -44,6 +45,15 @@ services:
     ports:
       - "127.0.0.1:3000:8080"
     environment:
+      DATABASE_URL: postgresql://openwebui:${OPENWEBUI_DB_PASSWORD:?run scripts/bootstrap.sh}@postgres:5432/openwebui
+      # Fixed key: sessions survive container recreation (upgrades).
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?run scripts/bootstrap.sh}
+      WEBUI_URL: ${WEBUI_URL:-http://localhost:3000}
+      DEFAULT_LOCALE: cs-CZ
+      # Admins see usage analytics, not the content of staff conversations.
+      ENABLE_ADMIN_CHAT_ACCESS: "false"
+      # Seeds a fresh database; scripts need an admin API key.
+      ENABLE_API_KEYS: "true"
       OPENAI_API_BASE_URL: http://litellm:4000/v1
       # Seeds the connection on a fresh database only; afterwards scripts/bootstrap.sh keeps it in sync.
       OPENAI_API_KEY: ${OPENWEBUI_LITELLM_KEY:-}
@@ -53,6 +63,8 @@ services:
     volumes:
       - open-webui-data:/app/backend/data
     depends_on:
+      db-init:
+        condition: service_completed_successfully
       litellm:
         condition: service_healthy
       open-terminal:

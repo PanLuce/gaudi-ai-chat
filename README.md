@@ -7,9 +7,10 @@ stejná sestava jako v produkci; liší se jen hodnoty v `.env`.
 
 1. `cp .env.example .env` a vyplň `LITELLM_MASTER_KEY`, `OPEN_TERMINAL_API_KEY`, `ANTHROPIC_API_KEY`.
 2. `scripts/bootstrap.sh` — vygeneruje chybějící hesla, spustí stack, založí klíč Open WebUI v LiteLLM.
-3. Otevři `http://localhost:3000`, zaregistruj se (první účet je admin).
-4. **Admin API key:** Admin Panel → Settings → General → *Enable API Keys*; pak Settings → Account →
-   API Keys → vytvořit, uložit do `.env` jako `OPENWEBUI_ADMIN_API_KEY`.
+3. Otevři `http://localhost:3000`, zaregistruj se (první účet je admin). Rozhraní je česky; pokud
+   prohlížeč pamatuje jiný jazyk z dřívějška, přepni ho v Nastavení → Obecné → Jazyk.
+4. **Admin API key:** Nastavení → Účet → API klíče → vytvořit, uložit do `.env` jako
+   `OPENWEBUI_ADMIN_API_KEY`. Nová databáze = nový klíč.
 5. Znovu `scripts/bootstrap.sh` (nastaví připojení Open WebUI → LiteLLM) a `scripts/smoke.sh`.
 
 ## Skripty

@@ -22,6 +22,23 @@ check_all_services_healthy() {
   pass "all services healthy"
 }
 
+check_openwebui_stores_data_in_postgres() {
+  local has_user_table
+  has_user_table=$(compose exec -T postgres psql -U postgres -d openwebui -tAc \
+    "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'user'" 2>/dev/null || true)
+  [ "$has_user_table" = "1" ] || fail "Open WebUI tables not found in Postgres database 'openwebui'"
+  pass "Open WebUI stores its data in Postgres"
+}
+
+# A fixed key keeps sessions valid when the container is recreated (e.g. on upgrade).
+check_openwebui_has_fixed_secret_key() {
+  local configured
+  configured=$(compose exec -T open-webui printenv WEBUI_SECRET_KEY 2>/dev/null || true)
+  [ -n "$configured" ] && [ "$configured" = "${WEBUI_SECRET_KEY:-}" ] \
+    || fail "Open WebUI does not run with WEBUI_SECRET_KEY from .env"
+  pass "Open WebUI runs with the fixed WEBUI_SECRET_KEY"
+}
+
 check_openwebui_offers_claude_models() {
   local offered
   offered=$(openwebui_admin GET /api/models | jq -r '.data[].id' | grep '^claude-' | sort | xargs)
@@ -41,6 +58,8 @@ check_haiku_answers_in_openwebui() {
 
 run_free_checks() {
   check_all_services_healthy
+  check_openwebui_stores_data_in_postgres
+  check_openwebui_has_fixed_secret_key
   check_openwebui_offers_claude_models
 }
 
