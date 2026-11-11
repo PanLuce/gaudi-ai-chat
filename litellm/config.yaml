@@ -20,6 +20,8 @@ model_list:
       api_key: os.environ/GEMINI_API_KEY
     model_info:
       mode: image_generation
+      # Explicit price, so budgets never silently see an image as free if the built-in price map changes.
+      output_cost_per_image: 0.045
 
 litellm_settings:
   # Budget every staff member gets unless set otherwise; created by scripts/bootstrap.sh.

@@ -77,15 +77,27 @@ ensure_staff_budget() {
 }
 
 # Open WebUI shows a connection model only to admins until it has its own entry with access rules.
-ensure_staff_model() {
-  local id=$1 name=$2 form path=/api/v1/models/create
-  form=$(jq -cn --arg id "$id" --arg name "$name" '{
-    id: $id, base_model_id: null, name: $name, meta: {}, params: {},
-    access_grants: [{principal_type: "user", principal_id: "*", permission: "read"}]}')
+# Sets a model's display name and its access rules to exactly the given grants.
+# /model/update ignores grants, so they are always written through /model/access/update.
+ensure_model_entry() {
+  local id=$1 name=$2 grants=$3 form path=/api/v1/models/create
+  form=$(jq -cn --arg id "$id" --arg name "$name" '{id: $id, base_model_id: null, name: $name, meta: {}, params: {}}')
   if openwebui_admin GET "/api/v1/models/model?id=$id" 2>/dev/null | jq -e '.id' >/dev/null; then
     path=/api/v1/models/model/update
   fi
-  openwebui_admin POST "$path" "$form" >/dev/null || fail "could not publish model $id to staff"
+  openwebui_admin POST "$path" "$form" >/dev/null || fail "could not set name of model $id"
+  openwebui_admin POST /api/v1/models/model/access/update \
+    "$(jq -cn --arg id "$id" --arg name "$name" --argjson grants "$grants" '{id: $id, name: $name, access_grants: $grants}')" \
+    >/dev/null || fail "could not set access rules of model $id"
+}
+
+ensure_staff_model() {
+  ensure_model_entry "$1" "$2" '[{"principal_type": "user", "principal_id": "*", "permission": "read"}]'
+}
+
+# The image model is used by the image button only; as a chat model it would just fail.
+ensure_image_model_hidden_from_chat() {
+  ensure_model_entry "$IMAGE_MODEL" "Gemini obrázky (jen pro tlačítko obrázku)" '[]'
 }
 
 ensure_staff_models() {
@@ -135,6 +147,7 @@ main() {
   sync_openwebui_connection
   if [ -n "${OPENWEBUI_ADMIN_API_KEY:-}" ]; then
     ensure_staff_models
+    ensure_image_model_hidden_from_chat
     sync_openwebui_image_generation
   fi
   pass "bootstrap done"

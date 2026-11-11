@@ -157,14 +157,19 @@ check_spend_is_charged_to_the_staff_member() {
   pass "spend is charged to the staff member ($spend USD)"
 }
 
-# Paid (~0.045 USD): a staff member gets a real image.
+# Paid (~0.045 USD): a staff member gets a real image, charged to their budget.
 check_staff_member_gets_an_image() {
-  local response
-  create_temporary_staff_user "$(unique_smoke_email)"
+  local email response spend
+  email=$(unique_smoke_email)
+  create_temporary_staff_user "$email"
+  on_exit_cleanup delete_litellm_customer "$email"
   response=$(api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL/api/v1/images/generations" "$SMALL_IMAGE") \
     || fail "image generation failed: $(head -c 300 <<<"$response")"
   jq -e '.[0].url' <<<"$response" >/dev/null || fail "no image in response: $(head -c 300 <<<"$response")"
-  pass "a staff member gets an image from $IMAGE_MODEL"
+  sleep 5 # LiteLLM writes spend asynchronously
+  spend=$(litellm_admin GET "/customer/info?end_user_id=$email" | jq -r '.spend // 0')
+  awk -v s="$spend" 'BEGIN { exit !(s > 0) }' || fail "image was not charged to $email (spend $spend)"
+  pass "a staff member gets an image from $IMAGE_MODEL, charged $spend USD"
 }
 
 run_paid_checks() {
