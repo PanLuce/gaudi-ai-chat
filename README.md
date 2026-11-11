@@ -23,8 +23,8 @@ stejná sestava jako v produkci; liší se jen hodnoty v `.env`.
 | `scripts/demo-over-budget.sh` | Ruční ukázka: dočasný účet přes rozpočet, vyzkoušíš v prohlížeči, po Enteru se smaže. Zdarma. |
 | `scripts/check-bootstrap-secrets.sh` | Ověří, že bootstrap na čerstvém `.env` z `.env.example` vygeneruje všechna hesla. Skutečný `.env` nemění. |
 | `scripts/backup.sh` | Záloha obou databází a souborů Open WebUI do `backups/<čas>/`, drží posledních 14. |
-| `scripts/restore.sh <adresář>` | Obnova ze zálohy; vše od zálohy se ztratí (ptá se, `--yes` bez ptaní). |
-| `scripts/check-backup-restore.sh` | Ověří, že záloha vrátí smazaný chat, soubor i útratu. **Ne na serveru v provozu** — obnova vrací databáze do okamžiku zálohy. Zdarma. |
+| `scripts/restore.sh <adresář>` | Obnova ze zálohy; vše od zálohy se ztratí (ptá se, `--yes` bez ptaní). Nejdřív celou zálohu přečte nanečisto — poškozenou odmítne a nic nezmění — a uloží aktuální stav jako další zálohu, takže jde vrátit i obnova. |
+| `scripts/check-backup-restore.sh` | Ověří, že záloha vrátí smazaný chat, soubor i útratu a že poškozenou zálohu obnova odmítne. **Ne na serveru v provozu** — obnova vrací databáze do okamžiku zálohy. Zdarma. |
 | `scripts/smoke.sh --paid` | Navíc ověří skutečné odpovědi modelů (1 malý placený požadavek na kontrolu). **Musí projít, než službu začne někdo používat.** |
 
 ## Adresy

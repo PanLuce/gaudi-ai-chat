@@ -12,12 +12,26 @@ confirm() {
   [ "$answer" = "RESTORE" ] || fail "cancelled"
 }
 
-check_backup_is_complete() {
+# Reads every file of the backup in full before anything is stopped or deleted:
+# a truncated dump or archive is refused while the current data is still intact.
+verify_backup() {
   local database
   for database in $APP_DATABASES; do
     [ -s "$1/$database.dump" ] || fail "$1 has no $database.dump"
+    compose exec -T postgres pg_restore -f /dev/null < "$1/$database.dump" 2>/dev/null \
+      || fail "$1/$database.dump is damaged, nothing was changed"
   done
   [ -s "$1/$OPENWEBUI_VOLUME.tar.gz" ] || fail "$1 has no $OPENWEBUI_VOLUME.tar.gz"
+  docker run --rm -i "$(tools_image)" tar tzf - < "$1/$OPENWEBUI_VOLUME.tar.gz" >/dev/null 2>&1 \
+    || fail "$1/$OPENWEBUI_VOLUME.tar.gz is damaged, nothing was changed"
+  info "backup $1 is complete and readable"
+}
+
+# The current state is backed up first, so a restore can itself be undone.
+back_up_current_state() {
+  local safety
+  safety=$("$REPO_ROOT/scripts/backup.sh" | tail -1) || fail "could not back up the current state, nothing was changed"
+  info "current state saved to $safety (restore it if this restore is not what you wanted)"
 }
 
 # Dropping and re-creating leaves nothing behind that was created after the backup.
@@ -50,8 +64,9 @@ main() {
   [ -n "$dir" ] || fail "usage: scripts/restore.sh [--yes] backups/<UTC time>"
   require_tools docker jq
   load_env
-  check_backup_is_complete "$dir"
+  verify_backup "$dir"
   $assume_yes || confirm "$dir"
+  back_up_current_state
   # shellcheck disable=SC2086
   compose stop $APP_SERVICES
   local database

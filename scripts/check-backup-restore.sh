@@ -43,6 +43,19 @@ chat_exists() { openwebui_admin GET "/api/v1/chats/$CHAT_ID" 2>/dev/null | jq -e
 file_content() { openwebui_admin GET "/api/v1/files/$FILE_ID/content" 2>/dev/null || true; }
 recorded_spend() { litellm_admin GET "/customer/info?end_user_id=$SPEND_EMAIL" 2>/dev/null | jq -r '.spend // empty' || true; }
 
+# A damaged backup must be refused before anything is deleted (the current data stays).
+assert_damaged_backup_is_refused() {
+  local good=$1 damaged_file=$2 damaged size
+  damaged="$BACKUP_ROOT/damaged-$damaged_file"
+  cp -R "$good" "$damaged"
+  size=$(wc -c < "$good/$damaged_file")
+  head -c $((size / 2)) "$good/$damaged_file" > "$damaged/$damaged_file"
+  ! "$REPO_ROOT/scripts/restore.sh" --yes "$damaged" >/dev/null 2>&1 || fail "restore accepted a backup with a truncated $damaged_file"
+  chat_exists || fail "a refused restore of a truncated $damaged_file deleted the current data"
+  [ "$(file_content)" = "$FILE_CONTENT" ] || fail "a refused restore of a truncated $damaged_file deleted the uploaded files"
+  pass "a backup with a truncated $damaged_file is refused and the current data stays"
+}
+
 assert_data_is_back() {
   chat_exists || fail "the chat did not come back from the backup"
   pass "a deleted chat is back (Open WebUI database)"
@@ -57,14 +70,17 @@ main() {
   load_env
   BACKUP_ROOT=$(mktemp -d)
   on_exit_cleanup rm -rf "$BACKUP_ROOT"
+  export BACKUP_ROOT # restore.sh's safety backup goes here too, not into backups/
   create_chat
   upload_file
   create_temporary_customer "$SPEND_EMAIL" "$SPEND_USD"
   sleep 2 # let LiteLLM finish writing the customer before the dump
   local backup_dir
-  backup_dir=$(BACKUP_ROOT="$BACKUP_ROOT" "$REPO_ROOT/scripts/backup.sh" | tail -1)
+  backup_dir=$("$REPO_ROOT/scripts/backup.sh" | tail -1)
   [ -d "$backup_dir" ] || fail "backup.sh did not report a backup directory (got: $backup_dir)"
   info "backup: $backup_dir"
+  assert_damaged_backup_is_refused "$backup_dir" openwebui.dump
+  assert_damaged_backup_is_refused "$backup_dir" "$OPENWEBUI_VOLUME.tar.gz"
   lose_the_data
   "$REPO_ROOT/scripts/restore.sh" --yes "$backup_dir" >/dev/null || fail "restore.sh failed"
   assert_data_is_back
