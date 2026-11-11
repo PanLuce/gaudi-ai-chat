@@ -21,6 +21,7 @@ stejná sestava jako v produkci; liší se jen hodnoty v `.env`.
 | `scripts/smoke.sh` | Ověří běžící stack přes porty, které používají lidé. Zdarma. |
 | `scripts/demo-staff.sh` | Ruční ukázka: dočasný účet běžného uživatele — co vidí zaměstnanec (modely, terminál, obrázky); po Enteru se smaže. Zdarma. |
 | `scripts/demo-over-budget.sh` | Ruční ukázka: dočasný účet přes rozpočet, vyzkoušíš v prohlížeči, po Enteru se smaže. Zdarma. |
+| `scripts/check-bootstrap-secrets.sh` | Ověří, že bootstrap na čerstvém `.env` z `.env.example` vygeneruje všechna hesla. Skutečný `.env` nemění. |
 | `scripts/backup.sh` | Záloha obou databází a souborů Open WebUI do `backups/<čas>/`, drží posledních 14. |
 | `scripts/restore.sh <adresář>` | Obnova ze zálohy; vše od zálohy se ztratí (ptá se, `--yes` bez ptaní). |
 | `scripts/check-backup-restore.sh` | Ověří, že záloha vrátí smazaný chat, soubor i útratu. **Ne na serveru v provozu** — obnova vrací databáze do okamžiku zálohy. Zdarma. |

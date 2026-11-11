@@ -24,10 +24,11 @@ readonly INITIAL_MODELS=(
   "gemini-image|Gemini obrázky (pro tlačítko obrázku)|admin"
 )
 
+# A missing line and an empty value (as .env.example ships them) both get a new secret.
 ensure_secret() {
   local name=$1 prefix=${2:-}
-  if ! grep -q "^$name=" "$ENV_FILE"; then
-    printf '%s=%s%s\n' "$name" "$prefix" "$(openssl rand -hex 24)" >> "$ENV_FILE"
+  if ! grep -q "^$name=." "$ENV_FILE"; then
+    set_env_value "$name" "$prefix$(openssl rand -hex 24)"
     info "generated $name"
   fi
 }
@@ -180,4 +181,5 @@ main() {
   pass "bootstrap done"
 }
 
-main "$@"
+# Sourcing (as tests do) only defines the functions.
+[ "${BASH_SOURCE[0]}" != "$0" ] || main "$@"
