@@ -28,6 +28,11 @@ stejná sestava jako v produkci; liší se jen hodnoty v `.env`.
 | Open WebUI | `http://localhost:3000` |
 | LiteLLM admin UI (útrata, klíče) | `http://127.0.0.1:4000/ui`, uživatel `admin`, heslo `LITELLM_UI_PASSWORD` v `.env` |
 
+## Dokumenty
+
+- `docs/google-oauth-setup.md` — návod pro správce Google Workspace školy (OAuth klient pro přihlášení).
+- `docs/adr/` — zaznamenaná rozhodnutí.
+
 ## Modely
 
 `claude-haiku` (výchozí), `claude-sonnet`, `claude-opus` — mapování v `litellm/config.yaml`.
