@@ -35,5 +35,15 @@ stejná sestava jako v produkci; liší se jen hodnoty v `.env`.
 
 ## Modely
 
-`claude-haiku` (výchozí), `claude-sonnet`, `claude-opus` — mapování v `litellm/config.yaml`.
-Klíč Open WebUI v LiteLLM má strop $100 / 30 dní pro celou instanci.
+`claude-haiku` (výchozí), `claude-sonnet`, `claude-opus` — mapování v `litellm/config.yaml`,
+názvy a pořadí v Open WebUI v `scripts/bootstrap.sh` (`STAFF_TEXT_MODELS`). Bootstrap je zveřejní všem
+přihlášeným; bez toho by je Open WebUI ukázalo jen adminům. Tyto tři modely spravuje **jen bootstrap** —
+úpravy v UI (popis, ikona, systémový prompt) další běh přepíše; měň je v `STAFF_TEXT_MODELS`.
+
+## Rozpočty
+
+- **Na osobu:** $5 / 30 dní (`staff-monthly`, `scripts/lib.sh`). Open WebUI posílá e-mail přihlášeného,
+  LiteLLM podle něj počítá útratu. Kdo rozpočet vyčerpá, dostane v chatu chybu `ExceededBudget`.
+  Útrata a rozpočty lidí: LiteLLM UI → *Customers*.
+- **Celá instance:** klíč Open WebUI v LiteLLM má strop $100 / 30 dní.
+- **U poskytovatele:** měsíční limit workspace `openwebui` v console.anthropic.com.

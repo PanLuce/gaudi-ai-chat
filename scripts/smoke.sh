@@ -46,6 +46,45 @@ check_openwebui_offers_claude_models() {
   pass "Open WebUI offers $EXPECTED_TEXT_MODELS"
 }
 
+# Open WebUI hides models without access rules from regular users, so check as one of them.
+check_staff_member_sees_claude_models() {
+  local offered
+  create_temporary_staff_user "$(unique_smoke_email)"
+  offered=$(api_request "$TEMP_USER_TOKEN" GET "$OPENWEBUI_URL/api/models" | jq -r '.data[].id' | grep '^claude-' | sort | xargs)
+  [ "$offered" = "$EXPECTED_TEXT_MODELS" ] || fail "a staff member sees [$offered], expected [$EXPECTED_TEXT_MODELS]"
+  pass "a staff member sees $EXPECTED_TEXT_MODELS"
+}
+
+check_default_staff_budget() {
+  local budget
+  budget=$(litellm_admin POST /budget/info "{\"budgets\":[\"$STAFF_BUDGET_ID\"]}" 2>/dev/null \
+    | jq -r '.[0] | "\(.max_budget) \(.budget_duration)"' || true)
+  [ "$budget" = "$STAFF_BUDGET_USD.0 30d" ] || fail "staff budget '$STAFF_BUDGET_ID' is [$budget], expected [$STAFF_BUDGET_USD.0 30d]"
+  pass "every staff member gets \$$STAFF_BUDGET_USD per 30 days"
+}
+
+# Free: the budget check runs before any provider call. A blocked request also proves that
+# Open WebUI forwards the user's e-mail, since LiteLLM can only find the budget through it.
+check_overspent_user_is_blocked_in_openwebui() {
+  local email response
+  email=$(unique_smoke_email)
+  create_temporary_staff_user "$email"
+  litellm_admin POST /customer/new "$(jq -n --arg e "$email" '{user_id: $e, spend: 6}')" >/dev/null
+  on_exit_cleanup litellm_admin POST /customer/delete "'$(jq -cn --arg e "$email" '{user_ids: [$e]}')'"
+  assert_chat_blocked_by_budget '{"model":"claude-haiku","stream":false,"max_tokens":5,"messages":[{"role":"user","content":"ahoj"}]}'
+  pass "a user over budget is blocked in Open WebUI"
+  # A custom "user" parameter (allowed in chat settings) must not move spend to another identity.
+  assert_chat_blocked_by_budget '{"model":"claude-haiku","stream":false,"max_tokens":5,"user":"someone-else@skolagaudi.cz","messages":[{"role":"user","content":"ahoj"}]}'
+  pass "the budget cannot be dodged with a custom 'user' parameter"
+}
+
+assert_chat_blocked_by_budget() {
+  local request=$1 response
+  response=$(api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL/api/chat/completions" "$request" 2>/dev/null || true)
+  grep -q "ExceededBudget" <<<"$response" \
+    || fail "overspent user was not blocked by budget: $(head -c 300 <<<"$response")"
+}
+
 check_haiku_answers_in_openwebui() {
   local response answer
   response=$(openwebui_admin POST /api/chat/completions \
@@ -61,10 +100,29 @@ run_free_checks() {
   check_openwebui_stores_data_in_postgres
   check_openwebui_has_fixed_secret_key
   check_openwebui_offers_claude_models
+  check_staff_member_sees_claude_models
+  check_default_staff_budget
+  check_overspent_user_is_blocked_in_openwebui
+}
+
+# Paid: a real answer for a staff member is charged to that person's e-mail.
+check_spend_is_charged_to_the_staff_member() {
+  local email spend
+  email=$(unique_smoke_email)
+  create_temporary_staff_user "$email"
+  on_exit_cleanup litellm_admin POST /customer/delete "'$(jq -cn --arg e "$email" '{user_ids: [$e]}')'"
+  api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL/api/chat/completions" \
+    '{"model":"claude-haiku","stream":false,"max_tokens":5,"messages":[{"role":"user","content":"ahoj"}]}' >/dev/null \
+    || fail "staff member's request failed"
+  sleep 5 # LiteLLM writes spend asynchronously
+  spend=$(litellm_admin GET "/customer/info?end_user_id=$email" | jq -r '.spend // 0')
+  awk -v s="$spend" 'BEGIN { exit !(s > 0) }' || fail "no spend recorded for $email"
+  pass "spend is charged to the staff member ($spend USD)"
 }
 
 run_paid_checks() {
   check_haiku_answers_in_openwebui
+  check_spend_is_charged_to_the_staff_member
 }
 
 main() {

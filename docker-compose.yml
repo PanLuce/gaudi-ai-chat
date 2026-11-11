@@ -55,6 +55,8 @@ services:
       # Seeds a fresh database; scripts need an admin API key.
       ENABLE_API_KEYS: "true"
       OPENAI_API_BASE_URL: http://litellm:4000/v1
+      # Sends X-OpenWebUI-User-Email etc., which LiteLLM uses to charge each person's budget.
+      ENABLE_FORWARD_USER_INFO_HEADERS: "true"
       # Seeds the connection on a fresh database only; afterwards scripts/bootstrap.sh keeps it in sync.
       OPENAI_API_KEY: ${OPENWEBUI_LITELLM_KEY:-}
       ANONYMIZED_TELEMETRY: "false"
