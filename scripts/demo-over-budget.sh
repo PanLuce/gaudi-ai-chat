@@ -8,15 +8,6 @@ set -euo pipefail
 
 readonly DEMO_SPEND_USD=6 # above the $STAFF_BUDGET_USD budget
 
-create_demo_account() {
-  local email=$1 password=$2 user_id
-  user_id=$(openwebui_admin POST /api/v1/auths/add \
-    "$(jq -n --arg e "$email" --arg p "$password" '{name: "Demo přes rozpočet", email: $e, password: $p, role: "user"}')" \
-    | jq -er .id) || fail "could not create the demo account"
-  on_exit_cleanup openwebui_admin DELETE "/api/v1/users/$user_id"
-  create_temporary_customer "$email" "$DEMO_SPEND_USD"
-}
-
 print_instructions() {
   cat <<EOF
 
@@ -39,10 +30,10 @@ main() {
   local email password
   email="smoke-demo-$(date +%s)@skolagaudi.cz"
   password=$(openssl rand -hex 8)
-  create_demo_account "$email" "$password"
+  create_demo_staff_account "$email" "$password" "Demo přes rozpočet"
+  create_temporary_customer "$email" "$DEMO_SPEND_USD"
   print_instructions "$email" "$password"
-  read -r -p "Press Enter when done (the account is then deleted)… " _
-  info "deleting the demo account"
+  wait_until_demo_is_done
 }
 
 main "$@"

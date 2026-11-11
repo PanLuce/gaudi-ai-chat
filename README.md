@@ -19,6 +19,7 @@ stejná sestava jako v produkci; liší se jen hodnoty v `.env`.
 |---|---|
 | `scripts/bootstrap.sh` | Uvede stack do nakonfigurovaného stavu; lze spouštět opakovaně. |
 | `scripts/smoke.sh` | Ověří běžící stack přes porty, které používají lidé. Zdarma. |
+| `scripts/demo-staff.sh` | Ruční ukázka: dočasný účet běžného uživatele — co vidí zaměstnanec (modely, terminál, obrázky); po Enteru se smaže. Zdarma. |
 | `scripts/demo-over-budget.sh` | Ruční ukázka: dočasný účet přes rozpočet, vyzkoušíš v prohlížeči, po Enteru se smaže. Zdarma. |
 | `scripts/smoke.sh --paid` | Navíc ověří skutečné odpovědi modelů (1 malý placený požadavek na kontrolu). **Musí projít, než službu začne někdo používat.** |
 
@@ -68,6 +69,6 @@ WebSockety (streamované odpovědi). Adresa je `WEBUI_URL` v `.env`; bootstrap j
 
 ## Terminál
 
-`open-terminal` je shell na serveru. Bootstrap ho připojí do Open WebUI (adresa a klíč z `.env`) **jen pro
-adminy**: připojení nemá žádná pravidla přístupu, což Open WebUI chápe jako „jen admin“. Smoke hlídá, že
-ho běžný uživatel nevidí — kdyby admin v UI přidal přístup dalším, smoke na to upozorní.
+`open-terminal` je shell na serveru. Bootstrap ho připojí do Open WebUI (adresa a klíč z `.env`); nové
+připojení nemá žádná pravidla přístupu, což Open WebUI chápe jako „jen admin“. Kdo další ho smí používat,
+je konfigurace admina v UI a bootstrap ji nepřepisuje. Co vidí běžný uživatel: `scripts/demo-staff.sh`.

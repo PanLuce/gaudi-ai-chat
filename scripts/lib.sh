@@ -100,3 +100,18 @@ create_temporary_staff_user() {
     "$(jq -n --arg e "$email" --arg p "$password" '{email: $e, password: $p}')" | jq -er .token) \
     || fail "could not sign in temporary user $email"
 }
+
+# Creates a regular Open WebUI account for trying things in the browser, deleted on exit.
+# Call it directly, never inside $(...): a subshell would lose the cleanup registration.
+create_demo_staff_account() {
+  local email=$1 password=$2 name=$3 user_id
+  user_id=$(openwebui_admin POST /api/v1/auths/add \
+    "$(jq -n --arg e "$email" --arg p "$password" --arg n "$name" '{name: $n, email: $e, password: $p, role: "user"}')" \
+    | jq -er .id) || fail "could not create the demo account"
+  on_exit_cleanup openwebui_admin DELETE "/api/v1/users/$user_id"
+}
+
+wait_until_demo_is_done() {
+  read -r -p "Press Enter when done (the account is then deleted)… " _
+  info "deleting the demo account"
+}

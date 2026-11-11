@@ -63,7 +63,7 @@ check_openwebui_knows_its_public_address() {
   pass "Open WebUI knows its public address $OPENWEBUI_URL"
 }
 
-# The terminal is a shell on the server: administrators only (decided for this school).
+# Who else may use the terminal is the admin's configuration; the admin must always have it.
 check_admin_runs_commands_in_the_terminal() {
   local terminals output
   terminals=$(openwebui_admin GET /api/v1/terminals/ | jq -r '.[].id' | xargs)
@@ -71,16 +71,6 @@ check_admin_runs_commands_in_the_terminal() {
   output=$(openwebui_admin POST "/api/v1/terminals/$TERMINAL_ID/execute?wait=10" "$TERMINAL_COMMAND" 2>&1 || true)
   grep -q "smoke-terminal-ok" <<<"$output" || fail "admin cannot run a command in the terminal: $(head -c 300 <<<"$output")"
   pass "an admin runs commands in the terminal through Open WebUI"
-}
-
-check_staff_member_has_no_terminal() {
-  local terminals
-  create_temporary_staff_user "$(unique_smoke_email)"
-  terminals=$(api_request "$TEMP_USER_TOKEN" GET "$OPENWEBUI_URL/api/v1/terminals/" | jq -c '[.[].id]')
-  [ "$terminals" = "[]" ] || fail "a staff member sees terminals $terminals"
-  ! api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL/api/v1/terminals/$TERMINAL_ID/execute?wait=10" "$TERMINAL_COMMAND" >/dev/null 2>&1 \
-    || fail "a staff member can run commands in the terminal"
-  pass "a staff member has no terminal"
 }
 
 check_openwebui_stores_data_in_postgres() {
@@ -204,7 +194,6 @@ run_free_checks() {
   check_staff_member_sees_default_model
   check_openwebui_generates_images_through_litellm
   check_admin_runs_commands_in_the_terminal
-  check_staff_member_has_no_terminal
   check_default_staff_budget
   check_overspent_user_is_blocked_in_openwebui
 }
