@@ -12,6 +12,7 @@ readonly OPENWEBUI_KEY_MONTHLY_BUDGET_USD=100
 readonly OPENWEBUI_KEY_ALIAS="open-webui"
 
 readonly IMAGE_MODEL="gemini-image"
+readonly TERMINAL_ID="open-terminal"
 
 # Initial model setup in Open WebUI: "<LiteLLM model name>|<name shown>|<who sees it: all or admin>".
 # Applied only when a model has no entry yet; afterwards visibility, names and the default model
@@ -124,6 +125,21 @@ sync_openwebui_image_generation() {
   info "image generation: $IMAGE_MODEL through LiteLLM"
 }
 
+# Address and key of the terminal come from the deployment; who may use it is the connection's
+# access rules. A new connection has none, which Open WebUI treats as administrators only.
+sync_openwebui_terminal() {
+  openwebui_admin GET /api/v1/configs/terminal_servers \
+    | jq -c --arg id "$TERMINAL_ID" --arg key "$OPEN_TERMINAL_API_KEY" '
+        .TERMINAL_SERVER_CONNECTIONS |= (
+          (map(select(.id == $id)) | first // {config: {}}) as $current
+          | map(select(.id != $id))
+          + [$current + {id: $id, name: "Terminál serveru", enabled: true,
+                         url: "http://open-terminal:8000", key: $key, auth_type: "bearer"}])' \
+    | { read -r config; openwebui_admin POST /api/v1/configs/terminal_servers "$config" >/dev/null; } \
+    || fail "could not configure the terminal connection"
+  info "terminal $TERMINAL_ID connected (administrators only unless the admin grants more)"
+}
+
 # The public address is part of the deployment (.env), not an admin setting: OAuth redirects use it.
 # MFA fields are left out: only a signed-in administrator may change them, not an API key,
 # and Open WebUI keeps them as they are when they are not sent.
@@ -159,6 +175,7 @@ main() {
     seed_models
     sync_openwebui_image_generation
     sync_openwebui_public_address
+    sync_openwebui_terminal
   fi
   pass "bootstrap done"
 }

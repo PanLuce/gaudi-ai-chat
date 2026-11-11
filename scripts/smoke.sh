@@ -9,6 +9,8 @@ set -euo pipefail
 readonly EXPECTED_TEXT_MODELS="claude-haiku claude-opus claude-sonnet"
 readonly IMAGE_MODEL="gemini-image"
 readonly SMALL_CHAT='{"model":"claude-haiku","stream":false,"max_tokens":5,"messages":[{"role":"user","content":"ahoj"}]}'
+readonly TERMINAL_ID="open-terminal"
+readonly TERMINAL_COMMAND='{"command":"echo smoke-terminal-ok"}'
 readonly SMALL_IMAGE='{"prompt":"a small red apple on a white table"}'
 
 readonly ONE_SHOT_SERVICES="db-init"
@@ -59,6 +61,26 @@ check_openwebui_knows_its_public_address() {
   configured=$(openwebui_admin GET /api/v1/auths/admin/config | jq -r '.WEBUI_URL')
   [ "$configured" = "$OPENWEBUI_URL" ] || fail "Open WebUI thinks its address is $configured, expected $OPENWEBUI_URL"
   pass "Open WebUI knows its public address $OPENWEBUI_URL"
+}
+
+# The terminal is a shell on the server: administrators only (decided for this school).
+check_admin_runs_commands_in_the_terminal() {
+  local terminals output
+  terminals=$(openwebui_admin GET /api/v1/terminals/ | jq -r '.[].id' | xargs)
+  grep -qw -- "$TERMINAL_ID" <<<"$terminals" || fail "admin does not see the terminal $TERMINAL_ID (sees: [$terminals])"
+  output=$(openwebui_admin POST "/api/v1/terminals/$TERMINAL_ID/execute?wait=10" "$TERMINAL_COMMAND" 2>&1 || true)
+  grep -q "smoke-terminal-ok" <<<"$output" || fail "admin cannot run a command in the terminal: $(head -c 300 <<<"$output")"
+  pass "an admin runs commands in the terminal through Open WebUI"
+}
+
+check_staff_member_has_no_terminal() {
+  local terminals
+  create_temporary_staff_user "$(unique_smoke_email)"
+  terminals=$(api_request "$TEMP_USER_TOKEN" GET "$OPENWEBUI_URL/api/v1/terminals/" | jq -c '[.[].id]')
+  [ "$terminals" = "[]" ] || fail "a staff member sees terminals $terminals"
+  ! api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL/api/v1/terminals/$TERMINAL_ID/execute?wait=10" "$TERMINAL_COMMAND" >/dev/null 2>&1 \
+    || fail "a staff member can run commands in the terminal"
+  pass "a staff member has no terminal"
 }
 
 check_openwebui_stores_data_in_postgres() {
@@ -181,6 +203,8 @@ run_free_checks() {
   check_openwebui_offers_claude_models
   check_staff_member_sees_default_model
   check_openwebui_generates_images_through_litellm
+  check_admin_runs_commands_in_the_terminal
+  check_staff_member_has_no_terminal
   check_default_staff_budget
   check_overspent_user_is_blocked_in_openwebui
 }

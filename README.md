@@ -65,3 +65,9 @@ WebSockety (streamované odpovědi). Adresa je `WEBUI_URL` v `.env`; bootstrap j
 (odkazy, přesměrování Google přihlášení). Na serveru se mění jen `.env`:
 `WEBUI_URL=https://ai.skolagaudi.cz` (Caddy si sám vyřídí certifikát Let's Encrypt) a
 `PUBLIC_BIND_ADDRESS=0.0.0.0`.
+
+## Terminál
+
+`open-terminal` je shell na serveru. Bootstrap ho připojí do Open WebUI (adresa a klíč z `.env`) **jen pro
+adminy**: připojení nemá žádná pravidla přístupu, což Open WebUI chápe jako „jen admin“. Smoke hlídá, že
+ho běžný uživatel nevidí — kdyby admin v UI přidal přístup dalším, smoke na to upozorní.
