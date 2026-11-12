@@ -229,6 +229,35 @@ JS
   pass "docs/nasazeni.html: the nightly backup is copied to Google Drive"
 }
 
+# Sign-up is closed (WEBUI_ADMIN_EMAIL) until Google login (#3) lands in docker-compose.yml.
+check_guide_matches_the_stack() {
+  local signup_open=false
+  grep -q ENABLE_OAUTH_SIGNUP "$REPO_ROOT/docker-compose.yml" && signup_open=true
+  SIGNUP_OPEN=$signup_open run_guide_check "docs/nasazeni.html: a step does not match how the stack works" <<'JS'
+let failed = false;
+const at = (title) => guide.STEPS.findIndex((step) => step.title === title);
+const text = (step) => [step.why, step.where, step.see].join(" ");
+if (process.env.SIGNUP_OPEN !== "true") {
+  guide.STEPS.forEach((step, index) => {
+    if (/zaregistr/i.test(text(step))) {
+      failed = true; console.error(`✗ step ${index + 1} (${step.title}): sends people to sign up, but sign-up is closed`);
+    }
+  });
+}
+// The copy in the password manager must hold everything a restore on a new server needs.
+const saved = guide.STEPS[at("Ulož .env do správce hesel")], drive = at("Zálohy mimo server (Google Drive)");
+if (!saved || at("Ulož .env do správce hesel") < drive || !/drive-backup\.json/.test(text(saved))) {
+  failed = true; console.error("✗ the .env copy in the password manager is made before the Drive settings, or without the Drive key");
+}
+// Each provider has its own spending cap, set by the admin, behind the budgets in the Gateway.
+if (!guide.STEPS.some((step) => /Monthly spend cap/.test(text(step)))) {
+  failed = true; console.error("✗ no step sets the Gemini spend cap in Google AI Studio");
+}
+process.exit(failed ? 1 : 0);
+JS
+  pass "docs/nasazeni.html: the guide matches closed sign-up, the backup keys and the provider caps"
+}
+
 main() {
   require_tools curl gh grep node
   local page
@@ -245,6 +274,7 @@ main() {
   check_guide_phase_steps
   check_overview_trip
   check_guide_offsite_copy
+  check_guide_matches_the_stack
 }
 
 main "$@"
