@@ -17,7 +17,19 @@ SCHOOL_BUDGET = "rozpocet-skoly"
 
 # Budgets above a single person: the key Open WebUI uses (the school's budget), or a team.
 SHARED_BUDGET_ENTITIES = {"key", "team"}
-SCHOOL_BUDGET_TEXT = "AI chat má tento měsíc vyčerpaný rozpočet celé školy. Dej vědět správci."
+
+# Code -> text. The personal budget message is built in personal_budget_message(), it has a date.
+MESSAGES = {
+    SCHOOL_BUDGET: "AI chat má tento měsíc vyčerpaný rozpočet celé školy. Dej vědět správci.",
+    "pretizeno": "Model je teď přetížený. Zkus to za chvíli znovu.",
+    "cas": "Odpověď trvala příliš dlouho. Zkus to znovu, případně kratší dotaz.",
+    "dlouha-konverzace": "Konverzace je na model moc dlouhá. Začni nový chat.",
+    "odmitnuto": "Poskytovatel tento dotaz odmítl zpracovat.",
+    "nastaveni": "Chyba v nastavení AI chatu. Dej vědět správci.",
+    "jina": "Něco se nepovedlo. Zkus to znovu, a když to nepomůže, dej vědět správci.",
+}
+OVERLOADED_STATUSES = {429, 503, 529}
+SETTINGS_STATUSES = {401, 403, 404}
 
 
 def format_usd(amount: float) -> str:
@@ -45,13 +57,42 @@ def is_personal_budget(exc: Exception) -> bool:
     return isinstance(exc, litellm.BudgetExceededError) and getattr(exc, "entity_type", None) == "end_user"
 
 
-def czech_message(exc: Exception, reset_at: datetime | None = None) -> tuple[str, str] | None:
-    """Returns (code, Czech text) for an error a person can see, or None to keep the original."""
+def czech_message(exc: Exception, reset_at: datetime | None = None) -> tuple[str, str]:
+    """Returns (code, Czech text) for any error a person can see."""
     if is_personal_budget(exc):
         return PERSONAL_BUDGET, personal_budget_message(exc.max_budget, reset_at)
     if isinstance(exc, litellm.BudgetExceededError) and getattr(exc, "entity_type", None) in SHARED_BUDGET_ENTITIES:
-        return SCHOOL_BUDGET, SCHOOL_BUDGET_TEXT
+        return SCHOOL_BUDGET, MESSAGES[SCHOOL_BUDGET]
+    code = error_code(exc)
+    return code, MESSAGES[code]
+
+
+def status_of(exc: Exception) -> int | None:
+    for attribute in ("status_code", "code"):
+        try:
+            return int(getattr(exc, attribute, None))
+        except (TypeError, ValueError):
+            continue
     return None
+
+
+def error_code(exc: Exception) -> str:
+    """Subclasses first: ContextWindowExceeded and ContentPolicyViolation are BadRequestErrors."""
+    text = str(getattr(exc, "message", exc)).lower()
+    status = status_of(exc)
+    if isinstance(exc, litellm.ContextWindowExceededError):
+        return "dlouha-konverzace"
+    if isinstance(exc, litellm.ContentPolicyViolationError):
+        return "odmitnuto"
+    if isinstance(exc, litellm.Timeout):
+        return "cas"
+    if isinstance(exc, (litellm.RateLimitError, litellm.ServiceUnavailableError)) \
+            or status in OVERLOADED_STATUSES or "overloaded" in text:
+        return "pretizeno"
+    if isinstance(exc, (litellm.AuthenticationError, litellm.PermissionDeniedError, litellm.NotFoundError)) \
+            or status in SETTINGS_STATUSES or "invalid model name" in text:
+        return "nastaveni"
+    return "jina"
 
 
 async def personal_budget_reset_at(end_user_id: str | None) -> datetime | None:
@@ -86,11 +127,8 @@ class CzechErrors(CustomLogger):
                 reset_at = await personal_budget_reset_at(getattr(original_exception, "entity_id", None))
             except Exception:  # noqa: BLE001  # the message must go out even if the lookup breaks
                 reset_at = None
-        translated = czech_message(original_exception, reset_at)
-        if translated is None:
-            return None
-        code, text = translated
-        status = getattr(original_exception, "status_code", None) or 500
+        code, text = czech_message(original_exception, reset_at)
+        status = status_of(original_exception) or 500
         return HTTPException(status_code=status, detail=with_code(code, text))
 
 

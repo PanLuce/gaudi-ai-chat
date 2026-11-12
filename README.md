@@ -61,10 +61,28 @@ chybu „Unprocessable Content“ — Open WebUI důvod u obrázků neukazuje; d
 ## Rozpočty
 
 - **Na osobu:** $5 / 30 dní (`staff-monthly`, `scripts/lib.sh`). Open WebUI posílá e-mail přihlášeného,
-  LiteLLM podle něj počítá útratu. Kdo rozpočet vyčerpá, dostane v chatu chybu `ExceededBudget`.
-  Útrata a rozpočty lidí: LiteLLM UI → *Customers*.
-- **Celá instance:** klíč Open WebUI v LiteLLM má strop $100 / 30 dní.
+  LiteLLM podle něj počítá útratu. Kdo rozpočet vyčerpá, dostane v chatu českou hlášku s datem obnovy
+  (kód `rozpocet`). Útrata a rozpočty lidí: LiteLLM UI → *Customers*.
+- **Rozpočet školy:** klíč Open WebUI v LiteLLM má strop $100 / 30 dní; po vyčerpání hláška s kódem `rozpocet-skoly`.
 - **U poskytovatele:** měsíční limit workspace `openwebui` v console.anthropic.com.
+
+## Chybové hlášky
+
+Chyby z LiteLLM (Brány) vidí lidé česky; přeloží je `litellm/czech_errors.py`. Každá hláška končí
+kódem `(kód: …)`. Anglický originál zůstává v logu: `docker compose logs litellm` nebo LiteLLM UI → *Logs*.
+
+| Kód | Kdy |
+|---|---|
+| `rozpocet` | člověk vyčerpal osobní rozpočet |
+| `rozpocet-skoly` | došel rozpočet klíče Open WebUI (celé školy) |
+| `pretizeno` | poskytovatel je přetížený nebo omezuje počet dotazů |
+| `cas` | odpověď nepřišla včas |
+| `dlouha-konverzace` | konverzace je na model moc dlouhá |
+| `odmitnuto` | poskytovatel dotaz odmítl (obsah) |
+| `nastaveni` | špatný klíč, chybí přístup nebo model není v `litellm/config.yaml` |
+| `jina` | cokoli jiného — důvod je v logu |
+
+U obrázků Open WebUI hlášku neukazuje (vidí jen „Unprocessable Content“), viz *Obrázky*.
 
 ## Vstup (Caddy)
 

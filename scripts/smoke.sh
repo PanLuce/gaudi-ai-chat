@@ -202,6 +202,53 @@ check_school_budget_message_is_czech() {
   pass "when the school budget runs out, people get a Czech message"
 }
 
+# Free: LiteLLM rejects an unknown model before any provider call. Sent with the key Open WebUI
+# uses, so this is the error people would see if a model disappeared from litellm/config.yaml.
+check_config_error_message_is_czech() {
+  local response
+  response=$(litellm_as "$OPENWEBUI_LITELLM_KEY" POST /v1/chat/completions \
+    '{"model":"smoke-no-such-model","max_tokens":5,"messages":[{"role":"user","content":"ahoj"}]}' 2>/dev/null || true)
+  grep -q "Chyba v nastavení AI chatu" <<<"$response" && grep -q "(kód: nastaveni)" <<<"$response" \
+    || fail "an unknown model did not get the Czech settings message: $(head -c 300 <<<"$response")"
+  pass "a broken model setting shows a Czech message"
+}
+
+# Provider errors cannot be caused for free, so the mapping runs against LiteLLM's own exception
+# classes inside the LiteLLM image, without network.
+check_provider_errors_are_czech() {
+  compose run --rm --no-deps -T --entrypoint python litellm - <<'PY_CHECK' || fail "a provider error has no Czech message"
+import sys, httpx, litellm
+from litellm.proxy._types import ProxyException
+sys.path.insert(0, "/app")
+from czech_errors import czech_message
+
+forbidden = httpx.Response(403, request=httpx.Request("POST", "https://provider"))
+cases = [
+    ("pretizeno", litellm.RateLimitError("rate limited", "anthropic", "claude")),
+    ("pretizeno", litellm.ServiceUnavailableError("unavailable", "anthropic", "claude")),
+    ("pretizeno", litellm.InternalServerError("AnthropicException - Overloaded", "anthropic", "claude")),
+    ("cas", litellm.Timeout("timed out", "claude", "anthropic")),
+    ("dlouha-konverzace", litellm.ContextWindowExceededError("prompt is too long", "claude", "anthropic")),
+    ("odmitnuto", litellm.ContentPolicyViolationError("blocked", "claude", "anthropic")),
+    ("nastaveni", litellm.AuthenticationError("invalid x-api-key", "anthropic", "claude")),
+    ("nastaveni", litellm.PermissionDeniedError("no access", "anthropic", "claude", forbidden)),
+    ("nastaveni", litellm.NotFoundError("model not found", "claude", "anthropic")),
+    ("nastaveni", ProxyException("Invalid model name passed in model=x", "invalid_request_error", None, 400)),
+    ("jina", litellm.BadRequestError("max_tokens is too large", "claude", "anthropic")),
+    ("jina", litellm.APIConnectionError("connection reset", "anthropic", "claude")),
+    ("jina", ValueError("anything else")),
+]
+failed = False
+for wanted, exc in cases:
+    got = czech_message(exc)
+    if not got or got[0] != wanted or not got[1]:
+        failed = True
+        print(f"✗ {type(exc).__name__}: got {got}, wanted code {wanted}", file=sys.stderr)
+sys.exit(1 if failed else 0)
+PY_CHECK
+  pass "every kind of provider error has a Czech message"
+}
+
 check_haiku_answers_in_openwebui() {
   local response answer
   response=$(openwebui_admin POST /api/chat/completions \
@@ -227,6 +274,8 @@ run_free_checks() {
   check_default_staff_budget
   check_overspent_user_is_blocked_in_openwebui
   check_school_budget_message_is_czech
+  check_config_error_message_is_czech
+  check_provider_errors_are_czech
 }
 
 # Paid: a real answer for a staff member is charged to that person's e-mail.

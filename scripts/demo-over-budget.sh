@@ -17,7 +17,7 @@ Demo account (spend \$$DEMO_SPEND_USD, budget \$$STAFF_BUDGET_USD):
   password: $2
 
 Try:
-  1. a text message        → error "ExceededBudget … Spend=$DEMO_SPEND_USD.0, Budget=$STAFF_BUDGET_USD.0"
+  1. a text message        → Czech error "Tvůj rozpočet na AI chat je vyčerpaný. … (kód: rozpocet)"
   2. the image button      → error, no image
   3. LiteLLM UI → Logs     → status failure, spend \$0
 
