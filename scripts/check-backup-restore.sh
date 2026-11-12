@@ -69,6 +69,27 @@ assert_chat_runs_after_backup() {
   pass "Chat answers again right after the backup"
 }
 
+# backup.sh's exit safety net, with a stand-in compose (no containers touched). A real Chat that
+# never comes back cannot be produced on demand, so the stand-in refuses "up".
+assert_failed_chat_restart_is_logged() {
+  local output
+  output=$(bash -c '. "$1/scripts/backup.sh"; compose() { [ "$1" != up ]; }; stop_chat' _ "$REPO_ROOT" 2>&1 || true)
+  grep -q "cleanup failed: restart_chat_if_stopped" <<<"$output" \
+    || fail "a backup that stops early does not report that Chat did not start again (got: $output)"
+  pass "if Chat does not start again after a failed backup, the log says so"
+}
+
+assert_chat_is_started_once() {
+  local calls starts
+  calls=$(mktemp)
+  COMPOSE_CALLS="$calls" bash -c '. "$1/scripts/backup.sh"; compose() { echo "$*" >> "$COMPOSE_CALLS"; }; stop_chat; start_chat' \
+    _ "$REPO_ROOT" >/dev/null 2>&1
+  starts=$(grep -c "^up " "$calls" || true)
+  rm -f "$calls"
+  [ "$starts" = 1 ] || fail "backup.sh starts Chat $starts times after a backup, expected once"
+  pass "a successful backup starts Chat exactly once"
+}
+
 lose_the_data() {
   openwebui_admin DELETE "/api/v1/chats/$CHAT_ID" >/dev/null || fail "could not delete the test chat"
   openwebui_admin DELETE "/api/v1/files/$FILE_ID" >/dev/null || fail "could not delete the test file"
@@ -110,6 +131,8 @@ assert_data_is_back() {
 main() {
   require_tools docker curl jq
   load_env
+  assert_failed_chat_restart_is_logged
+  assert_chat_is_started_once
   BACKUP_ROOT=$(mktemp -d)
   on_exit_cleanup rm -rf "$BACKUP_ROOT"
   export BACKUP_ROOT # restore.sh's safety backup goes here too, not into backups/

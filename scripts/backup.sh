@@ -5,7 +5,7 @@
 # Chat (open-webui) is stopped while its database and files are saved, so both are from the same moment
 # and the search index (SQLite) is never copied mid-write. The nightly run makes that a few seconds at 2:30.
 set -euo pipefail
-. "$(dirname "$0")/lib.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 readonly BACKUPS_KEPT=14
 BACKUP_ROOT="${BACKUP_ROOT:-$REPO_ROOT/backups}"
@@ -22,13 +22,23 @@ archive_openwebui_files() {
 readonly CHAT_SERVICE="open-webui"
 readonly CHAT_DATABASE="openwebui" # saved while Chat is stopped, together with its files
 
-# Registered as an exit action too, so Chat comes back even when the backup fails halfway.
+CHAT_STOPPED=false
+
 start_chat() {
   compose up -d --wait "$CHAT_SERVICE" >/dev/null 2>&1 || fail "Chat ($CHAT_SERVICE) did not start again after the backup"
+  CHAT_STOPPED=false
+}
+
+# Exit action: brings Chat back when the backup stopped halfway. It must not call fail (exit inside the
+# trap, output discarded); a non-zero return makes run_cleanup print "cleanup failed: restart_chat_if_stopped".
+restart_chat_if_stopped() {
+  [ "$CHAT_STOPPED" = true ] || return 0
+  compose up -d --wait "$CHAT_SERVICE"
 }
 
 stop_chat() {
-  on_exit_cleanup start_chat
+  on_exit_cleanup restart_chat_if_stopped
+  CHAT_STOPPED=true
   compose stop "$CHAT_SERVICE" >/dev/null 2>&1 || fail "could not stop Chat ($CHAT_SERVICE) for the backup"
 }
 
@@ -62,4 +72,4 @@ main() {
   echo "$dir"
 }
 
-main "$@"
+[ "${BASH_SOURCE[0]}" != "$0" ] || main "$@"
