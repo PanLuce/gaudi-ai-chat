@@ -79,6 +79,21 @@ header { display: grid; gap: 12px; }
 @media (prefers-reduced-motion: reduce) { .bubble { transition: none; } }
 
 /* The detail card */
+/* Playing the trip of one question over the picture */
+[hidden] { display: none !important; } /* the artifact skeleton has it too; also when opened from disk */
+.trip-start { justify-self: start; font: 600 15px var(--font-body); border: 1.5px solid var(--accent); background: var(--accent-soft); color: var(--accent); border-radius: 10px; padding: 8px 14px; cursor: pointer; }
+.trip-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; background: var(--surface); border: 1.5px solid var(--accent); border-radius: 12px; padding: 10px 14px; }
+.trip-bar .step-no { font: 600 14px var(--font-mono); color: var(--accent); font-variant-numeric: tabular-nums; }
+.trip-bar .text { flex: 1 1 24ch; min-width: 0; font-size: 17px; }
+.trip-buttons { display: flex; gap: 8px; }
+.trip-bar button { font: 600 14px var(--font-body); border: 1.5px solid var(--accent); background: var(--surface); color: var(--accent); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+.trip-bar button.primary { background: var(--accent); color: var(--surface); }
+.trip-bar button:disabled { opacity: 0.4; cursor: default; }
+.trip-start:focus-visible, .trip-bar button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.map.playing .node { opacity: 0.4; transition: opacity 0.2s; }
+.map.playing .node.lit { opacity: 1; border-color: var(--accent); border-style: solid; box-shadow: 0 0 0 3px var(--accent-soft); }
+@media (prefers-reduced-motion: reduce) { .map.playing .node { transition: none; } }
+
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: grid; gap: 12px; min-width: 0; }
 .card h2 { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
 .card h2 .tech { font: 14px var(--font-mono); color: var(--muted); font-weight: 400; }
@@ -108,10 +123,22 @@ footer { color: var(--muted); font-size: 14px; display: grid; gap: 6px; }
     <p class="lead">Šest částí, každá má jeden úkol. Najeď myší na část (na telefonu ťukni) a uvidíš, co dělá a kde ji najdeš.</p>
   </header>
 
-  <section class="map" aria-label="Schéma systému">
+  <button type="button" class="trip-start" id="trip-start">▶ Přehrát cestu dotazu</button>
+
+  <section class="map" id="map" aria-label="Schéma systému">
     <ol class="path" id="path"></ol>
     <div class="backstage" id="backstage"><span class="backstage-label">Za scénou</span></div>
   </section>
+
+  <div class="trip-bar" id="trip-bar" aria-live="polite" hidden>
+    <span class="step-no" id="trip-no"></span>
+    <span class="text" id="trip-text"></span>
+    <span class="trip-buttons">
+      <button type="button" id="trip-back" aria-label="Předchozí krok">←</button>
+      <button type="button" class="primary" id="trip-next">Další →</button>
+      <button type="button" id="trip-close">Zavřít</button>
+    </span>
+  </div>
 
   <section class="card" id="card" aria-live="polite"></section>
 
@@ -162,6 +189,15 @@ const PARTS = [
     laik: "Nástroj pro správce: příkazová řádka serveru přímo v Chatu. Běžní zaměstnanci ho ve výchozím stavu nevidí.",
     links: [ { when: "adresa", url: null, note: "žádná vlastní, otevírá se v Chatu" } ] },
 ];
+
+// The trip of one question: each step lights up its parts on the picture and shows one short line.
+const TRIP = [
+  { parts: ["zamestnanec"], text: "Napíšeš otázku v prohlížeči." },
+  { parts: ["vchod"], text: "Vchod ji přijme zamčeným spojením." },
+  { parts: ["chat", "databaze"], text: "Chat ji uloží a pošle Bráně s tvým e-mailem." },
+  { parts: ["brana"], text: "Brána zkontroluje tvých 5 $ a pošle otázku dál." },
+  { parts: ["poskytovatele", "brana"], text: "Poskytovatel odpoví; Brána ti připíše cenu." },
+];
 </script>
 
 <script>
@@ -211,6 +247,44 @@ function select(id) {
   card.innerHTML = `<h2>${part.name} <span class="tech">${part.tech}</span></h2><p>${part.laik}</p>`
     + (part.links.length ? `<ul class="links">${part.links.map(linkRow).join("")}</ul>` : "");
 }
+
+const map = document.getElementById("map");
+const tripStart = document.getElementById("trip-start");
+const tripBar = document.getElementById("trip-bar");
+const tripNext = document.getElementById("trip-next");
+let tripStep = 0;
+
+function showStep(index) {
+  tripStep = index;
+  const step = TRIP[index];
+  map.classList.add("playing");
+  document.querySelectorAll(".node").forEach((node) => node.classList.toggle("lit", step.parts.includes(node.dataset.id)));
+  document.getElementById("trip-no").textContent = `${index + 1} / ${TRIP.length}`;
+  document.getElementById("trip-text").textContent = step.text;
+  document.getElementById("trip-back").disabled = index === 0;
+  tripNext.textContent = index === TRIP.length - 1 ? "Znovu" : "Další →";
+  select(step.parts[0]);
+}
+
+function startTrip() {
+  tripStart.hidden = true;
+  tripBar.hidden = false;
+  showStep(0);
+  tripNext.focus();
+}
+
+function stopTrip() {
+  map.classList.remove("playing");
+  document.querySelectorAll(".node.lit").forEach((node) => node.classList.remove("lit"));
+  tripBar.hidden = true;
+  tripStart.hidden = false;
+  tripStart.focus();
+}
+
+tripStart.addEventListener("click", startTrip);
+document.getElementById("trip-back").addEventListener("click", () => showStep(tripStep - 1));
+tripNext.addEventListener("click", () => showStep((tripStep + 1) % TRIP.length));
+document.getElementById("trip-close").addEventListener("click", stopTrip);
 
 renderPath();
 select("brana");
