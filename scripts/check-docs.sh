@@ -109,7 +109,6 @@ guide.STEPS.forEach((step, index) => {
   }
 });
 guide.STEPS.forEach((step, index) => {
-  if (step.todo) return;
   const prompt = guide.promptFor(step, index);
   const required = [step.title, step.see, "gaudi-ai", "Nikdy nevypisuj"].concat(step.command ? [step.command] : []);
   required.filter((part) => !prompt.includes(part))
@@ -222,7 +221,7 @@ let failed = false;
 if (!nightly || !/scripts\/backup\.sh && scripts\/offsite\.sh upload/.test(nightly.command || "")) {
   failed = true; console.error("✗ the nightly crontab line does not run scripts/offsite.sh upload after the backup");
 }
-if (!offsite || offsite.todo || !/scripts\/offsite\.sh upload/.test(offsite.command || "")) {
+if (!offsite || !/scripts\/offsite\.sh upload/.test(offsite.command || "")) {
   failed = true; console.error("✗ the step Zálohy mimo server is not ready or does not try an upload");
 }
 process.exit(failed ? 1 : 0);
