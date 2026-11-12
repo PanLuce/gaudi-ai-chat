@@ -59,36 +59,49 @@ check_no_secrets() {
 }
 
 # Runs the guide's own data script in node and checks the prompt of every step that is ready.
-check_guide_prompts() {
-  node - "$REPO_ROOT/docs/nasazeni.html" <<'JS' || fail "docs/nasazeni.html: a step has no complete prompt"
-const fs = require("fs"), vm = require("vm");
+# Every guide check starts from the same data: the <script id="guide-data"> of docs/nasazeni.html,
+# run in a sandbox. The check's JS gets `guide` with STEPS and the helpers the page defines (null if missing).
+readonly GUIDE_LOADER='const fs = require("fs"), vm = require("vm");
 const html = fs.readFileSync(process.argv[2], "utf8");
 const data = html.match(/<script id="guide-data">([\s\S]*?)<\/script>/);
 if (!data) { console.error("✗ no <script id=\"guide-data\"> with the steps"); process.exit(1); }
-const context = {};
-vm.runInNewContext(data[1] + "\nthis.STEPS = STEPS; this.promptFor = promptFor;", context);
+const guide = {};
+vm.runInNewContext(data[1] + `
+this.STEPS = typeof STEPS === "undefined" ? null : STEPS;
+this.promptFor = typeof promptFor === "function" ? promptFor : null;
+this.phaseLabel = typeof phaseLabel === "function" ? phaseLabel : null;
+this.phaseSteps = typeof phaseSteps === "function" ? phaseSteps : null;`, guide);
+if (!guide.STEPS) { console.error("✗ guide-data defines no STEPS"); process.exit(1); }'
+
+# Reads the check's JS from stdin and runs it after the loader; fails with $1 when it exits non-zero.
+run_guide_check() {
+  { printf '%s\n' "$GUIDE_LOADER"; cat; } | node - "$REPO_ROOT/docs/nasazeni.html" || fail "$1"
+}
+
+check_guide_prompts() {
+  run_guide_check "docs/nasazeni.html: a step has no complete prompt" <<'JS'
 let failed = false;
 // A command is copied as it is, so it must not hold anything the reader has to replace inside it.
-context.STEPS.forEach((step, index) => {
+guide.STEPS.forEach((step, index) => {
   if (step.command && /203\.0\.113\.|<[^>]*>/.test(step.command)) {
     failed = true; console.error(`✗ step ${index + 1} (${step.title}): the command holds a placeholder to replace`);
   }
 });
 // Secrets never reach a screen or a transcript: no command prints a new one, and every step that
 // handles .env contents is done by the person, with a prompt that tells Claude not to run it.
-context.STEPS.forEach((step, index) => {
+guide.STEPS.forEach((step, index) => {
   if (!step.command) return;
   if (/^\s*(echo [^|>]*openssl rand|openssl rand)/m.test(step.command)) {
     failed = true; console.error(`✗ step ${index + 1} (${step.title}): the command prints a generated secret`);
   }
   if (/nano \.env|cat [^\n]*\.env|scp [^\n]*\.env/.test(step.command)
-      && !(step.manual && context.promptFor(step, index).includes("Nespouštěj"))) {
+      && !(step.manual && guide.promptFor(step, index).includes("Nespouštěj"))) {
     failed = true; console.error(`✗ step ${index + 1} (${step.title}): handles .env but is not a manual step`);
   }
 });
-context.STEPS.forEach((step, index) => {
+guide.STEPS.forEach((step, index) => {
   if (step.todo) return;
-  const prompt = context.promptFor(step, index);
+  const prompt = guide.promptFor(step, index);
   const required = [step.title, step.see, "gaudi-ai", "Nikdy nevypisuj"].concat(step.command ? [step.command] : []);
   required.filter((part) => !prompt.includes(part))
     .forEach((part) => { failed = true; console.error(`✗ step ${index + 1} (${step.title}): prompt lacks "${part.slice(0, 40)}"`); });
@@ -99,25 +112,20 @@ JS
 }
 
 check_guide_phases() {
-  node - "$REPO_ROOT/docs/nasazeni.html" <<'JS' || fail "docs/nasazeni.html: a phase button does not say which steps it holds"
-const fs = require("fs"), vm = require("vm");
-const html = fs.readFileSync(process.argv[2], "utf8");
-const data = html.match(/<script id="guide-data">([\s\S]*?)<\/script>/)[1];
-const context = {};
-vm.runInNewContext(data + "\nthis.STEPS = STEPS; this.phaseLabel = typeof phaseLabel === 'function' ? phaseLabel : null;", context);
-if (!context.phaseLabel) { console.error("✗ no phaseLabel(phase) in guide-data"); process.exit(1); }
+  run_guide_check "docs/nasazeni.html: a phase button does not say which steps it holds" <<'JS'
+if (!guide.phaseLabel) { console.error("✗ no phaseLabel(phase) in guide-data"); process.exit(1); }
 // A phase button jumps to the phase's first step, so its label must show the step numbers it covers.
 let failed = false, expectedFirst = 1;
-const phases = [...new Set(context.STEPS.map((step) => step.phase))];
+const phases = [...new Set(guide.STEPS.map((step) => step.phase))];
 phases.forEach((phase) => {
-  const numbers = context.STEPS.map((step, index) => step.phase === phase ? index + 1 : null).filter(Boolean);
+  const numbers = guide.STEPS.map((step, index) => step.phase === phase ? index + 1 : null).filter(Boolean);
   const first = numbers[0], last = numbers[numbers.length - 1];
   if (first !== expectedFirst || last - first + 1 !== numbers.length) {
     failed = true; console.error(`✗ phase ${phase}: steps ${numbers.join(", ")} are not one block after step ${expectedFirst - 1}`);
   }
   const wanted = first === last ? `${phase} · ${first}` : `${phase} · ${first}–${last}`;
-  if (context.phaseLabel(phase) !== wanted) {
-    failed = true; console.error(`✗ phase ${phase}: label "${context.phaseLabel(phase)}", wanted "${wanted}"`);
+  if (guide.phaseLabel(phase) !== wanted) {
+    failed = true; console.error(`✗ phase ${phase}: label "${guide.phaseLabel(phase)}", wanted "${wanted}"`);
   }
   expectedFirst = last + 1;
 });
@@ -127,23 +135,18 @@ JS
 }
 
 check_guide_phase_steps() {
-  node - "$REPO_ROOT/docs/nasazeni.html" <<'JS' || fail "docs/nasazeni.html: a phase does not list all its steps"
-const fs = require("fs"), vm = require("vm");
-const html = fs.readFileSync(process.argv[2], "utf8");
-const data = html.match(/<script id="guide-data">([\s\S]*?)<\/script>/)[1];
-const context = {};
-vm.runInNewContext(data + "\nthis.STEPS = STEPS; this.phaseSteps = typeof phaseSteps === 'function' ? phaseSteps : null;", context);
-if (!context.phaseSteps) { console.error("✗ no phaseSteps(phase) in guide-data"); process.exit(1); }
+  run_guide_check "docs/nasazeni.html: a phase does not list all its steps" <<'JS'
+if (!guide.phaseSteps) { console.error("✗ no phaseSteps(phase) in guide-data"); process.exit(1); }
 // The row under the phase buttons must offer every step of the current phase, by number and a short name.
 let failed = false;
-context.STEPS.forEach((step, index) => {
+guide.STEPS.forEach((step, index) => {
   if (!step.short || step.short.length > 24) {
     failed = true; console.error(`✗ step ${index + 1} (${step.title}): short name missing or longer than 24 characters`);
   }
 });
-[...new Set(context.STEPS.map((step) => step.phase))].forEach((phase) => {
-  const wanted = context.STEPS.map((step, index) => step.phase === phase ? `${index}|${index + 1} ${step.short}` : null).filter(Boolean).join(",");
-  const got = context.phaseSteps(phase).map((item) => `${item.index}|${item.label}`).join(",");
+[...new Set(guide.STEPS.map((step) => step.phase))].forEach((phase) => {
+  const wanted = guide.STEPS.map((step, index) => step.phase === phase ? `${index}|${index + 1} ${step.short}` : null).filter(Boolean).join(",");
+  const got = guide.phaseSteps(phase).map((item) => `${item.index}|${item.label}`).join(",");
   if (got !== wanted) { failed = true; console.error(`✗ phase ${phase}: row "${got}", wanted "${wanted}"`); }
 });
 process.exit(failed ? 1 : 0);
