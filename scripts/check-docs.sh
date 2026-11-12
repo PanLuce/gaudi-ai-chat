@@ -98,6 +98,34 @@ JS
   pass "docs/nasazeni.html: every ready step exports a complete prompt"
 }
 
+check_guide_phases() {
+  node - "$REPO_ROOT/docs/nasazeni.html" <<'JS' || fail "docs/nasazeni.html: a phase button does not say which steps it holds"
+const fs = require("fs"), vm = require("vm");
+const html = fs.readFileSync(process.argv[2], "utf8");
+const data = html.match(/<script id="guide-data">([\s\S]*?)<\/script>/)[1];
+const context = {};
+vm.runInNewContext(data + "\nthis.STEPS = STEPS; this.phaseLabel = typeof phaseLabel === 'function' ? phaseLabel : null;", context);
+if (!context.phaseLabel) { console.error("✗ no phaseLabel(phase) in guide-data"); process.exit(1); }
+// A phase button jumps to the phase's first step, so its label must show the step numbers it covers.
+let failed = false, expectedFirst = 1;
+const phases = [...new Set(context.STEPS.map((step) => step.phase))];
+phases.forEach((phase) => {
+  const numbers = context.STEPS.map((step, index) => step.phase === phase ? index + 1 : null).filter(Boolean);
+  const first = numbers[0], last = numbers[numbers.length - 1];
+  if (first !== expectedFirst || last - first + 1 !== numbers.length) {
+    failed = true; console.error(`✗ phase ${phase}: steps ${numbers.join(", ")} are not one block after step ${expectedFirst - 1}`);
+  }
+  const wanted = first === last ? `${phase} · ${first}` : `${phase} · ${first}–${last}`;
+  if (context.phaseLabel(phase) !== wanted) {
+    failed = true; console.error(`✗ phase ${phase}: label "${context.phaseLabel(phase)}", wanted "${wanted}"`);
+  }
+  expectedFirst = last + 1;
+});
+process.exit(failed ? 1 : 0);
+JS
+  pass "docs/nasazeni.html: every phase button names its steps"
+}
+
 main() {
   require_tools curl grep node
   local page
@@ -110,6 +138,7 @@ main() {
     pass "docs/$page: links answer, one vocabulary, no secrets"
   done
   check_guide_prompts
+  check_guide_phases
 }
 
 main "$@"

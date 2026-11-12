@@ -343,6 +343,13 @@ function promptFor(step, index) {
   parts.push(PROMPT_RULES);
   return parts.join("\n\n");
 }
+
+// A phase button jumps to the phase's first step, so it names the steps it covers: "Server · 2–6".
+function phaseLabel(phase) {
+  const numbers = STEPS.map((step, index) => (step.phase === phase ? index + 1 : 0)).filter(Boolean);
+  const first = numbers[0], last = numbers[numbers.length - 1];
+  return first === last ? `${phase} · ${first}` : `${phase} · ${first}–${last}`;
+}
 </script>
 
 <script>
@@ -469,7 +476,7 @@ function renderProgress() {
   phases.replaceChildren();
   PHASES.forEach((phase, index) => {
     const item = element("li");
-    const button = element("button", index < phaseIndex ? "done" : index === phaseIndex ? "current" : "", phase);
+    const button = element("button", index < phaseIndex ? "done" : index === phaseIndex ? "current" : "", phaseLabel(phase));
     button.type = "button";
     button.addEventListener("click", () => go(STEPS.findIndex((step) => step.phase === phase)));
     item.appendChild(button);
