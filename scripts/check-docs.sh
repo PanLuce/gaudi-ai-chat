@@ -87,6 +87,15 @@ guide.STEPS.forEach((step, index) => {
     failed = true; console.error(`✗ step ${index + 1} (${step.title}): the command holds a placeholder to replace`);
   }
 });
+// Every line of a command is complete: a quote left open (e.g. a "\\n" the page turned into a real line break)
+// splits one shell command over two lines of the copied text.
+guide.STEPS.forEach((step, index) => {
+  (step.command || "").split("\n").forEach((line) => {
+    if ((line.match(/'/g) || []).length % 2) {
+      failed = true; console.error(`✗ step ${index + 1} (${step.title}): a quote is left open in: ${line.slice(0, 60)}`);
+    }
+  });
+});
 // Secrets never reach a screen or a transcript: no command prints a new one, and every step that
 // handles .env contents is done by the person, with a prompt that tells Claude not to run it.
 guide.STEPS.forEach((step, index) => {
