@@ -12,8 +12,6 @@
   --line: #d9e0dc;
   --accent: #1f6f5c;
   --accent-soft: #e1efe9;
-  --todo: #9a6200;
-  --todo-soft: #f6ecd9;
   --code-bg: #18201d;
   --code-fg: #e3e9e6;
   --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
@@ -23,14 +21,14 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #111614; --surface: #19201d; --fg: #e3e9e6; --muted: #98a6a0; --line: #2b3531;
-    --accent: #5cc0a3; --accent-soft: #1c3029; --todo: #e0b25c; --todo-soft: #33291a;
+    --accent: #5cc0a3; --accent-soft: #1c3029;
     --code-bg: #0b0f0d; --code-fg: #e3e9e6;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #111614; --surface: #19201d; --fg: #e3e9e6; --muted: #98a6a0; --line: #2b3531;
-  --accent: #5cc0a3; --accent-soft: #1c3029; --todo: #e0b25c; --todo-soft: #33291a;
+  --accent: #5cc0a3; --accent-soft: #1c3029;
   --code-bg: #0b0f0d; --code-fg: #e3e9e6;
   color-scheme: dark;
 }
@@ -70,8 +68,6 @@ header { display: grid; gap: 10px; }
 .copy { position: absolute; top: 8px; right: 8px; font: 500 12px var(--font-body); background: var(--surface); color: var(--fg); border: 0; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
 .links { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .links a { overflow-wrap: anywhere; }
-.todo { background: var(--todo-soft); color: var(--todo); border-radius: 10px; padding: 12px 14px; font-weight: 500; }
-.badge { justify-self: start; font: 500 12px var(--font-mono); padding: 2px 9px; border-radius: 999px; background: var(--todo-soft); color: var(--todo); }
 
 /* Export as a prompt */
 .export { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 16px; }
@@ -232,7 +228,7 @@ ls ~/openwebui-local/scripts`,
 cp .env.example .env && chmod 600 .env
 sed -i -e "s|^LITELLM_MASTER_KEY=.*|LITELLM_MASTER_KEY=sk-$(openssl rand -hex 24)|" -e "s|^OPEN_TERMINAL_API_KEY=.*|OPEN_TERMINAL_API_KEY=$(openssl rand -hex 24)|" -e "s|^WEBUI_URL=.*|WEBUI_URL=https://ai.skolagaudi.cz|" -e "s|^PUBLIC_BIND_ADDRESS=.*|PUBLIC_BIND_ADDRESS=0.0.0.0|" .env
 read -r -p "Tvůj školní e-mail (správce Chatu): " ADMIN_EMAIL
-sed -i '/^WEBUI_ADMIN_EMAIL=/d' .env && printf 'WEBUI_ADMIN_EMAIL=%s\n' "$ADMIN_EMAIL" >> .env
+sed -i '/^WEBUI_ADMIN_EMAIL=/d' .env && printf 'WEBUI_ADMIN_EMAIL=%s\\n' "$ADMIN_EMAIL" >> .env
 nano .env
 grep -cE '^ANTHROPIC_API_KEY=sk-ant-api|^GEMINI_API_KEY=AIza|^WEBUI_ADMIN_EMAIL=.+@' .env`,
     see: "Poslední příkaz vypíše 3: oba klíče poskytovatelů a tvůj e-mail správce jsou vyplněné. Žádná hodnota se neukáže.",
@@ -316,12 +312,6 @@ scripts/offsite.sh upload && scripts/offsite.sh list`,
       { label: "Google Cloud: klíč servisního účtu", url: "https://cloud.google.com/iam/docs/keys-create-delete" },
       { label: "rclone: Google Drive se servisním účtem", url: "https://rclone.org/drive/#service-account-support" },
       { label: "rclone: šifrování (crypt)", url: "https://rclone.org/crypt/" } ] },
-
-  { phase: "Zálohy", title: "Hlídání dostupnosti", short: "Dostupnost", todo: true,
-    why: "Hlídač pošle e-mail, když chat přestane odpovídat, dřív než si toho všimnou lidé.",
-    where: "Doplní se v samostatném kroku vývoje.",
-    see: "",
-    guides: [] },
 
   { phase: "Předání", title: "Předej chat lidem", short: "Předání",
     why: "Až kontrola svítí zeleně, otevřeš dveře. Lidé se zaregistrují a ty je schválíš.",
@@ -459,14 +449,13 @@ function renderStep() {
   const head = element("div", "step-head");
   head.appendChild(element("span", "eyebrow", step.phase));
   head.appendChild(element("h2", "", step.title));
-  if (step.todo) head.appendChild(element("span", "badge", "doplní se"));
   card.appendChild(head);
   card.appendChild(field("Proč", element("p", "why", step.why)));
-  card.appendChild(field("Kde", element("p", step.todo ? "todo" : "", step.where)));
+  card.appendChild(field("Kde", element("p", "", step.where)));
   if (step.command) card.appendChild(field("Příkaz", commandBlock(step.command)));
   if (step.see) card.appendChild(field("Uvidíš", element("p", "", step.see)));
   if (step.guides.length) card.appendChild(field("Oficiální návod", guideList(step.guides)));
-  if (!step.todo) card.appendChild(promptExport(step, current));
+  card.appendChild(promptExport(step, current));
 }
 
 // The prompt also sits in a closed box, so it can be selected by hand where copying is refused.

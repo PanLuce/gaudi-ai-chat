@@ -87,6 +87,15 @@ guide.STEPS.forEach((step, index) => {
     failed = true; console.error(`✗ step ${index + 1} (${step.title}): the command holds a placeholder to replace`);
   }
 });
+// Every line of a command is complete: a quote left open (e.g. a "\\n" the page turned into a real line break)
+// splits one shell command over two lines of the copied text.
+guide.STEPS.forEach((step, index) => {
+  (step.command || "").split("\n").forEach((line) => {
+    if ((line.match(/'/g) || []).length % 2) {
+      failed = true; console.error(`✗ step ${index + 1} (${step.title}): a quote is left open in: ${line.slice(0, 60)}`);
+    }
+  });
+});
 // Secrets never reach a screen or a transcript: no command prints a new one, and every step that
 // handles .env contents is done by the person, with a prompt that tells Claude not to run it.
 guide.STEPS.forEach((step, index) => {
@@ -100,7 +109,6 @@ guide.STEPS.forEach((step, index) => {
   }
 });
 guide.STEPS.forEach((step, index) => {
-  if (step.todo) return;
   const prompt = guide.promptFor(step, index);
   const required = [step.title, step.see, "gaudi-ai", "Nikdy nevypisuj"].concat(step.command ? [step.command] : []);
   required.filter((part) => !prompt.includes(part))
@@ -213,7 +221,7 @@ let failed = false;
 if (!nightly || !/scripts\/backup\.sh && scripts\/offsite\.sh upload/.test(nightly.command || "")) {
   failed = true; console.error("✗ the nightly crontab line does not run scripts/offsite.sh upload after the backup");
 }
-if (!offsite || offsite.todo || !/scripts\/offsite\.sh upload/.test(offsite.command || "")) {
+if (!offsite || !/scripts\/offsite\.sh upload/.test(offsite.command || "")) {
   failed = true; console.error("✗ the step Zálohy mimo server is not ready or does not try an upload");
 }
 process.exit(failed ? 1 : 0);
