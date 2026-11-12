@@ -75,6 +75,11 @@ services:
       DATABASE_URL: postgresql://openwebui:${OPENWEBUI_DB_PASSWORD:?run scripts/bootstrap.sh}@postgres:5432/openwebui
       # Fixed key: sessions survive container recreation (upgrades).
       WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?run scripts/bootstrap.sh}
+      # Creates the admin on the very first start (empty database) and closes sign-up; ignored afterwards.
+      # Optional here so that backups and other compose commands never fail on a server without them;
+      # scripts/bootstrap.sh is what insists on them.
+      WEBUI_ADMIN_EMAIL: ${WEBUI_ADMIN_EMAIL:-}
+      WEBUI_ADMIN_PASSWORD: ${WEBUI_ADMIN_PASSWORD:-}
       # Seeds a fresh database; scripts/bootstrap.sh keeps it in sync with .env.
       WEBUI_URL: ${WEBUI_URL:-http://localhost}
       DEFAULT_LOCALE: cs-CZ

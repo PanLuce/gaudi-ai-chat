@@ -231,9 +231,11 @@ ls ~/openwebui-local/scripts`,
     command: `cd ~/openwebui-local
 cp .env.example .env && chmod 600 .env
 sed -i -e "s|^LITELLM_MASTER_KEY=.*|LITELLM_MASTER_KEY=sk-$(openssl rand -hex 24)|" -e "s|^OPEN_TERMINAL_API_KEY=.*|OPEN_TERMINAL_API_KEY=$(openssl rand -hex 24)|" -e "s|^WEBUI_URL=.*|WEBUI_URL=https://ai.skolagaudi.cz|" -e "s|^PUBLIC_BIND_ADDRESS=.*|PUBLIC_BIND_ADDRESS=0.0.0.0|" .env
+read -r -p "Tvůj školní e-mail (správce Chatu): " ADMIN_EMAIL
+sed -i '/^WEBUI_ADMIN_EMAIL=/d' .env && printf 'WEBUI_ADMIN_EMAIL=%s\n' "$ADMIN_EMAIL" >> .env
 nano .env
-grep -cE '^ANTHROPIC_API_KEY=sk-ant-api|^GEMINI_API_KEY=AIza' .env`,
-    see: "Poslední příkaz vypíše 2: oba klíče poskytovatelů jsou vyplněné. Žádná hodnota se neukáže.",
+grep -cE '^ANTHROPIC_API_KEY=sk-ant-api|^GEMINI_API_KEY=AIza|^WEBUI_ADMIN_EMAIL=.+@' .env`,
+    see: "Poslední příkaz vypíše 3: oba klíče poskytovatelů a tvůj e-mail správce jsou vyplněné. Žádná hodnota se neukáže.",
     guides: [
       { label: "Anthropic Console: workspaces", url: "https://console.anthropic.com/settings/workspaces" },
       { label: "Google AI Studio: API keys", url: "https://aistudio.google.com/apikey" } ] },
@@ -248,15 +250,17 @@ curl --retry 10 --retry-delay 6 --retry-all-errors -sI https://ai.skolagaudi.cz/
     guides: [
       { label: "Caddy: automatické HTTPS", url: "https://caddyserver.com/docs/automatic-https" } ] },
 
-  { phase: "Spuštění", title: "Založ první účet (správce)", short: "První účet", manual: true,
-    why: "První účet, který se zaregistruje, je správce. Udělej to hned, ať ho nezaloží nikdo jiný.",
-    where: "V prohlížeči na https://ai.skolagaudi.cz → zaregistruj se. Pak Nastavení → Účet → API klíče → Vytvořit nový klíč. Na serveru ho vlož do .env za OPENWEBUI_ADMIN_API_KEY= a spusť bootstrap znovu.",
-    command: `cd ~/openwebui-local
+  { phase: "Spuštění", title: "Přihlas se jako správce", short: "Správce", manual: true,
+    why: "Účet správce Chatu založil systém sám při prvním startu z tvého e-mailu a hesla v .env, takže ho nikdo jiný nepředběhne a registrace je zavřená. Pozor, hesla jsou tři různá: správce Chatu (tady), Brána (krok Podívej se do Brány) a root na serveru (jen SSH klíč).",
+    where: "V terminálu na svém počítači, sám (ne přes Claude): první příkaz ukáže heslo správce Chatu jen tobě. V prohlížeči na https://ai.skolagaudi.cz se přihlas svým e-mailem a tímto heslem. Pak Nastavení → Účet → API klíče → Vytvořit nový klíč. Na serveru ho vlož do .env za OPENWEBUI_ADMIN_API_KEY= a spusť bootstrap znovu.",
+    command: `ssh gaudi-ai "grep '^WEBUI_ADMIN_PASSWORD=' openwebui-local/.env | cut -d= -f2-"
+ssh gaudi-ai
+cd ~/openwebui-local
 nano .env
 scripts/bootstrap.sh`,
-    see: "Bootstrap tentokrát hlásí „Open WebUI connection points at LiteLLM“ a založení modelů. V Chatu vidíš Claude Haiku jako výchozí model.",
+    see: "Přihlášení projde a vpravo dole jsi správce. Bootstrap tentokrát hlásí „Open WebUI connection points at LiteLLM“ a založení modelů. V Chatu vidíš Claude Haiku jako výchozí model.",
     guides: [
-      { label: "Open WebUI: dokumentace", url: "https://docs.openwebui.com/" } ] },
+      { label: "Open WebUI: proměnné prostředí (WEBUI_ADMIN_EMAIL)", url: "https://docs.openwebui.com/reference/env-configuration/#webui_admin_email" } ] },
 
   { phase: "Kontrola", title: "Ověř, že vše funguje", short: "Kontrola",
     why: "Kontrolní seznam před odletem. Ověří každou část včetně skutečné odpovědi modelu a jednoho obrázku; stojí to pár centů.",
