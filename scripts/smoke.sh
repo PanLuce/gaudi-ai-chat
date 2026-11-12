@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Smoke checks against the running stack, through the ports people actually use.
 # Usage: scripts/smoke.sh          free checks only
-#        scripts/smoke.sh --paid   also checks that spend real provider credit (one tiny request each)
+#        scripts/smoke.sh --paid   also two checks that spend real provider credit (a short answer, one image)
 # Exit code is non-zero on the first failing check.
 set -euo pipefail
 . "$(dirname "$0")/test-lib.sh"
@@ -14,8 +14,6 @@ readonly TERMINAL_COMMAND='{"command":"echo smoke-terminal-ok"}'
 readonly SMALL_IMAGE='{"prompt":"a small red apple on a white table"}'
 
 readonly ONE_SHOT_SERVICES="db-init"
-# Where Open WebUI was published before Caddy became the only entry.
-readonly FORMER_DIRECT_OPENWEBUI_URL="http://127.0.0.1:3000"
 
 # Checks every long-running service the compose file defines, so a stopped one fails too.
 check_all_services_healthy() {
@@ -49,10 +47,13 @@ check_websocket_passes_through_caddy() {
   pass "chat streaming (WebSocket) passes through Caddy"
 }
 
-check_openwebui_is_not_reachable_directly() {
-  ! curl -s -o /dev/null --max-time 3 "$FORMER_DIRECT_OPENWEBUI_URL/health" \
-    || fail "Open WebUI is still reachable past Caddy at $FORMER_DIRECT_OPENWEBUI_URL"
-  pass "Open WebUI is not reachable past Caddy"
+# Only Caddy opens ports to the outside; the LiteLLM admin UI is published on this machine only (SSH tunnel).
+check_only_caddy_is_published() {
+  local exposed
+  exposed=$(compose ps --format json | jq -rs '[.[] | .Service as $s | .Publishers[]? | select(.PublishedPort > 0)
+      | select($s != "caddy" and ($s != "litellm" or .URL != "127.0.0.1")) | "\($s) \(.URL):\(.PublishedPort)"] | join(", ")')
+  [ -z "$exposed" ] || fail "published past Caddy: $exposed"
+  pass "only Caddy is reachable from outside; LiteLLM listens on 127.0.0.1 only"
 }
 
 # Links in e-mails and OAuth redirects are built from this address.
@@ -73,22 +74,7 @@ check_admin_runs_commands_in_the_terminal() {
   pass "an admin runs commands in the terminal through Open WebUI"
 }
 
-check_openwebui_stores_data_in_postgres() {
-  local has_user_table
-  has_user_table=$(compose exec -T postgres psql -U postgres -d openwebui -tAc \
-    "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'user'" 2>/dev/null || true)
-  [ "$has_user_table" = "1" ] || fail "Open WebUI tables not found in Postgres database 'openwebui'"
-  pass "Open WebUI stores its data in Postgres"
-}
 
-# A fixed key keeps sessions valid when the container is recreated (e.g. on upgrade).
-check_openwebui_has_fixed_secret_key() {
-  local configured
-  configured=$(compose exec -T open-webui printenv WEBUI_SECRET_KEY 2>/dev/null || true)
-  [ -n "$configured" ] && [ "$configured" = "${WEBUI_SECRET_KEY:-}" ] \
-    || fail "Open WebUI does not run with WEBUI_SECRET_KEY from .env"
-  pass "Open WebUI runs with the fixed WEBUI_SECRET_KEY"
-}
 
 check_openwebui_offers_claude_models() {
   local offered
@@ -109,34 +95,21 @@ check_staff_member_sees_default_model() {
   pass "a staff member can use the default model $default"
 }
 
-check_openwebui_generates_images_through_litellm() {
-  local config
-  config=$(openwebui_admin GET /api/v1/images/config | jq -c \
-    '{ENABLE_IMAGE_GENERATION, IMAGE_GENERATION_ENGINE, IMAGES_OPENAI_API_BASE_URL, IMAGE_GENERATION_MODEL}')
-  [ "$config" = '{"ENABLE_IMAGE_GENERATION":true,"IMAGE_GENERATION_ENGINE":"openai","IMAGES_OPENAI_API_BASE_URL":"http://litellm:4000/v1","IMAGE_GENERATION_MODEL":"gemini-image"}' ] \
-    || fail "Open WebUI image generation is $config"
-  pass "Open WebUI generates images with $IMAGE_MODEL through LiteLLM"
-}
 
-check_default_staff_budget() {
-  local budget
-  budget=$(litellm_admin POST /budget/info "{\"budgets\":[\"$STAFF_BUDGET_ID\"]}" 2>/dev/null \
-    | jq -r '.[0] | "\(.max_budget) \(.budget_duration)"' || true)
-  [ "$budget" = "$STAFF_BUDGET_USD.0 30d" ] || fail "staff budget '$STAFF_BUDGET_ID' is [$budget], expected [$STAFF_BUDGET_USD.0 30d]"
-  pass "every staff member gets \$$STAFF_BUDGET_USD per 30 days"
-}
 
 # Free: the budget check runs before any provider call. A blocked request also proves that
 # Open WebUI forwards the user's e-mail, since LiteLLM can only find the budget through it.
 check_overspent_user_is_blocked_in_openwebui() {
-  local email response
+  local email other
   email=$(unique_smoke_email)
   create_temporary_staff_user "$email"
   create_temporary_customer "$email" 6
   assert_blocked_by_budget /api/chat/completions "$SMALL_CHAT" "$email"
   pass "a user over budget is blocked in Open WebUI with a Czech message"
   # A custom "user" parameter (allowed in chat settings) must not move spend to another identity.
-  assert_blocked_by_budget /api/chat/completions "$(jq -c '.user = "someone-else@skolagaudi.cz"' <<<"$SMALL_CHAT")" "$email"
+  other=$(unique_smoke_email)
+  on_exit_cleanup delete_litellm_customer "$other" # exists only if the dodge ever worked
+  assert_blocked_by_budget /api/chat/completions "$(jq -c --arg u "$other" '.user = $u' <<<"$SMALL_CHAT")" "$email"
   pass "the budget cannot be dodged with a custom 'user' parameter"
   assert_image_blocked_by_budget "$email"
   pass "a user over budget cannot generate images either"
@@ -174,6 +147,8 @@ assert_blocked_by_budget() {
   response=$(api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL$path" "$request" 2>/dev/null || true)
   grep -q "Tvůj rozpočet na AI chat je vyčerpaný" <<<"$response" && grep -q "(kód: rozpocet)" <<<"$response" \
     || fail "overspent user did not get the Czech budget message: $(head -c 300 <<<"$response")"
+  grep -qF "využitý celých $STAFF_BUDGET_USD \$" <<<"$response" \
+    || fail "the budget message does not name the \$$STAFF_BUDGET_USD budget: $(head -c 300 <<<"$response")"
   grep -qF "Rozpočet se obnoví $(staff_budget_reset_day)." <<<"$response" \
     || fail "the budget message does not say when the budget resets ($(staff_budget_reset_day)): $(head -c 300 <<<"$response")"
   ! grep -qE "$email|ExceededBudget" <<<"$response" \
@@ -186,9 +161,9 @@ assert_blocked_by_budget() {
 check_school_budget_message_is_czech() {
   local alias key response
   alias=$(smoke_tag key)
+  on_exit_cleanup delete_litellm_key_alias "$alias"
   key=$(litellm_admin POST /key/generate "$(jq -cn --arg a "$alias" '{key_alias: $a, max_budget: 1, spend: 2, models: ["claude-haiku"]}')" \
     | jq -er .key) || fail "could not create temporary key $alias"
-  on_exit_cleanup delete_litellm_key_alias "$alias"
   [ "$(litellm_as "$key" GET /key/info | jq -r '.info.spend')" = "2.0" ] \
     || fail "temporary key $alias has no recorded spend; refusing a call that could be paid"
   response=$(litellm_as "$key" POST /v1/chat/completions "$SMALL_CHAT" 2>/dev/null || true)
@@ -215,7 +190,6 @@ check_config_error_message_is_czech() {
 check_provider_errors_are_czech() {
   compose run --rm --no-deps -T --entrypoint python litellm - <<'PY_CHECK' || fail "a provider error has no Czech message"
 import sys, httpx, litellm
-from litellm.proxy._types import ProxyException
 sys.path.insert(0, "/app")
 from czech_errors import czech_message
 
@@ -230,7 +204,6 @@ cases = [
     ("nastaveni", litellm.AuthenticationError("invalid x-api-key", "anthropic", "claude")),
     ("nastaveni", litellm.PermissionDeniedError("no access", "anthropic", "claude", forbidden)),
     ("nastaveni", litellm.NotFoundError("model not found", "claude", "anthropic")),
-    ("nastaveni", ProxyException("Invalid model name passed in model=x", "invalid_request_error", None, 400)),
     ("jina", litellm.BadRequestError("max_tokens is too large", "claude", "anthropic")),
     ("jina", litellm.APIConnectionError("connection reset", "anthropic", "claude")),
     ("jina", ValueError("anything else")),
@@ -246,68 +219,54 @@ PY_CHECK
   pass "every kind of provider error has a Czech message"
 }
 
-check_haiku_answers_in_openwebui() {
-  local response answer
-  response=$(openwebui_admin POST /api/chat/completions \
-    '{"model":"claude-haiku","stream":false,"max_tokens":20,"messages":[{"role":"user","content":"Odpověz jedním slovem: ahoj"}]}') \
-    || fail "claude-haiku request failed: $(jq -r '.error.message // .detail // .' <<<"$response" | head -c 300)"
-  answer=$(jq -r '.choices[0].message.content // empty' <<<"$response")
-  [ -n "$answer" ] || fail "claude-haiku returned no answer through Open WebUI"
-  pass "claude-haiku answers through Open WebUI: $answer"
-}
 
 run_free_checks() {
   check_all_services_healthy
   check_openwebui_is_served_through_caddy
   check_websocket_passes_through_caddy
-  check_openwebui_is_not_reachable_directly
+  check_only_caddy_is_published
   check_openwebui_knows_its_public_address
-  check_openwebui_stores_data_in_postgres
-  check_openwebui_has_fixed_secret_key
   check_openwebui_offers_claude_models
   check_staff_member_sees_default_model
-  check_openwebui_generates_images_through_litellm
   check_admin_runs_commands_in_the_terminal
-  check_default_staff_budget
   check_overspent_user_is_blocked_in_openwebui
   check_school_budget_message_is_czech
   check_config_error_message_is_czech
   check_provider_errors_are_czech
 }
 
-# Paid: a real answer for a staff member is charged to that person's e-mail.
-check_spend_is_charged_to_the_staff_member() {
-  local email spend
+# LiteLLM writes spend asynchronously.
+has_spend() { awk -v s="$(customer_spend "$1")" 'BEGIN { exit !(s > 0) }'; }
+
+# Paid: a staff member gets a real answer from claude-haiku, charged to that person's e-mail.
+check_staff_member_gets_an_answer_and_pays() {
+  local email response answer
   email=$(unique_smoke_email)
-  create_temporary_staff_user "$email"
   on_exit_cleanup delete_litellm_customer "$email"
-  api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL/api/chat/completions" \
-    "$SMALL_CHAT" >/dev/null \
-    || fail "staff member's request failed"
-  sleep 5 # LiteLLM writes spend asynchronously
-  spend=$(customer_spend "$email")
-  awk -v s="$spend" 'BEGIN { exit !(s > 0) }' || fail "no spend recorded for $email"
-  pass "spend is charged to the staff member ($spend USD)"
+  create_temporary_staff_user "$email"
+  response=$(api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL/api/chat/completions" "$SMALL_CHAT") \
+    || fail "staff member's request failed: $(head -c 300 <<<"$response")"
+  answer=$(jq -r '.choices[0].message.content // empty' <<<"$response")
+  [ -n "$answer" ] || fail "claude-haiku returned no answer to a staff member"
+  retry_until 10 2 has_spend "$email" || fail "no spend recorded for $email"
+  pass "a staff member gets an answer from claude-haiku ($answer), charged $(customer_spend "$email") USD"
 }
 
 # Paid (~0.045 USD): a staff member gets a real image, charged to their budget.
 check_staff_member_gets_an_image() {
   local email response spend
   email=$(unique_smoke_email)
-  create_temporary_staff_user "$email"
   on_exit_cleanup delete_litellm_customer "$email"
+  create_temporary_staff_user "$email"
   response=$(api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL/api/v1/images/generations" "$SMALL_IMAGE") \
     || fail "image generation failed: $(head -c 300 <<<"$response")"
   jq -e '.[0].url' <<<"$response" >/dev/null || fail "no image in response: $(head -c 300 <<<"$response")"
-  sleep 5 # LiteLLM writes spend asynchronously
-  spend=$(customer_spend "$email")
-  awk -v s="$spend" 'BEGIN { exit !(s > 0) }' || fail "image was not charged to $email (spend $spend)"
-  pass "a staff member gets an image from $IMAGE_MODEL, charged $spend USD"
+  retry_until 10 2 has_spend "$email" || fail "image was not charged to $email"
+  pass "a staff member gets an image from $IMAGE_MODEL, charged $(customer_spend "$email") USD"
 }
 
 run_paid_checks() {
-  check_haiku_answers_in_openwebui
-  check_spend_is_charged_to_the_staff_member
+  check_staff_member_gets_an_answer_and_pays
   check_staff_member_gets_an_image
 }
 

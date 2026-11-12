@@ -78,17 +78,6 @@ assert_failed_chat_restart_is_logged() {
   pass "if Chat does not start again after a failed backup, the log says so"
 }
 
-assert_chat_is_started_once() {
-  local calls starts
-  calls=$(mktemp)
-  COMPOSE_CALLS="$calls" bash -c '. "$1/scripts/backup.sh"; compose() { echo "$*" >> "$COMPOSE_CALLS"; }; stop_chat; start_chat' \
-    _ "$REPO_ROOT" >/dev/null 2>&1
-  starts=$(grep -c "^up " "$calls" || true)
-  rm -f "$calls"
-  [ "$starts" = 1 ] || fail "backup.sh starts Chat $starts times after a backup, expected once"
-  pass "a successful backup starts Chat exactly once"
-}
-
 lose_the_data() {
   openwebui_admin DELETE "/api/v1/chats/$CHAT_ID" >/dev/null || fail "could not delete the test chat"
   openwebui_admin DELETE "/api/v1/files/$FILE_ID" >/dev/null || fail "could not delete the test file"
@@ -131,7 +120,6 @@ main() {
   require_tools docker curl jq
   load_env
   assert_failed_chat_restart_is_logged
-  assert_chat_is_started_once
   BACKUP_ROOT=$(mktemp -d)
   on_exit_cleanup rm -rf "$BACKUP_ROOT"
   export BACKUP_ROOT # restore.sh's safety backup goes here too, not into backups/

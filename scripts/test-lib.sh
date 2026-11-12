@@ -23,22 +23,29 @@ customer_spend() {
   litellm_admin GET "/customer/info?end_user_id=$1" 2>/dev/null | jq -r '.spend // empty' || true
 }
 
-# LiteLLM writes request logs asynchronously and re-creates the customer row when it does,
-# so delete, wait for pending writes, then delete again.
+customer_exists() { litellm_admin GET "/customer/info?end_user_id=$1" >/dev/null 2>&1; }
+
+# LiteLLM writes request logs asynchronously and re-creates the customer row when it does, so delete,
+# wait for pending writes, delete again and check. Still there after 3 rounds: the run reports
+# "cleanup failed: delete_litellm_customer <e-mail>" instead of leaving it silently.
 delete_litellm_customer() {
-  local body
+  local body round
   body=$(jq -cn --arg e "$1" '{user_ids: [$e]}')
-  litellm_admin POST /customer/delete "$body" >/dev/null 2>&1 || true
-  sleep 5
-  litellm_admin POST /customer/delete "$body" >/dev/null 2>&1 || true
+  for round in 1 2 3; do
+    litellm_admin POST /customer/delete "$body" >/dev/null 2>&1 || true
+    sleep 5
+    litellm_admin POST /customer/delete "$body" >/dev/null 2>&1 || true
+    customer_exists "$1" || return 0
+  done
+  return 1
 }
 
 # Creates a LiteLLM customer with the given spend, deleted on exit.
 create_temporary_customer() {
   local email=$1 spend=$2
+  on_exit_cleanup delete_litellm_customer "$email"
   litellm_admin POST /customer/new "$(jq -n --arg e "$email" --argjson s "$spend" '{user_id: $e, spend: $s}')" >/dev/null \
     || fail "could not create customer $email"
-  on_exit_cleanup delete_litellm_customer "$email"
 }
 
 # Creates a regular Chat account (role user), deleted on exit: create_staff_account <e-mail> <password> [name].
