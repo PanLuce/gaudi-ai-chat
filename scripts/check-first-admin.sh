@@ -3,10 +3,10 @@
 # can take the admin account in the minutes after the first start. Runs a throwaway Chat container
 # with an empty database of its own; the running stack and its data are not touched. Free.
 set -euo pipefail
-. "$(dirname "$0")/lib.sh"
+. "$(dirname "$0")/test-lib.sh"
 
 readonly CHAT_SERVICE="open-webui"
-readonly TAG="smoke-admin-$(date +%s)"
+readonly TAG=$(smoke_tag admin)
 readonly ADMIN_EMAIL="$TAG@skolagaudi.cz"
 ADMIN_PASSWORD=""
 CHAT_URL=""
@@ -40,13 +40,10 @@ start_fresh_chat() {
   wait_until_chat_answers
 }
 
+chat_answers() { curl -sf "$CHAT_URL/health" >/dev/null 2>&1; }
+
 wait_until_chat_answers() {
-  local attempt
-  for attempt in $(seq 1 90); do
-    curl -sf "$CHAT_URL/health" >/dev/null 2>&1 && return 0
-    sleep 2
-  done
-  fail "the throwaway Chat did not start within 3 minutes"
+  retry_until 90 2 chat_answers || fail "the throwaway Chat did not start within 3 minutes"
 }
 
 assert_admin_from_env_can_sign_in() {

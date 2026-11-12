@@ -4,7 +4,7 @@
 #        scripts/smoke.sh --paid   also checks that spend real provider credit (one tiny request each)
 # Exit code is non-zero on the first failing check.
 set -euo pipefail
-. "$(dirname "$0")/lib.sh"
+. "$(dirname "$0")/test-lib.sh"
 
 readonly EXPECTED_TEXT_MODELS="claude-haiku claude-opus claude-sonnet"
 readonly IMAGE_MODEL="gemini-image"
@@ -146,14 +146,11 @@ check_overspent_user_is_blocked_in_openwebui() {
 # Cost note: free only while the budget check works; if it broke for images alone, this would buy
 # one image (~0.045 USD). The chat checks above run first and stop the run on a general budget failure.
 assert_image_blocked_by_budget() {
-  local email=$1 attempt
+  local email=$1
   ! api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL/api/v1/images/generations" "$SMALL_IMAGE" >/dev/null 2>&1 \
     || fail "overspent user got an image"
-  for attempt in 1 2 3 4 5 6 7 8 9 10; do # LiteLLM writes its request log asynchronously
-    image_refused_for_budget "$email" && return 0
-    sleep 2
-  done
-  fail "image request of overspent user was not refused by the budget check"
+  retry_until 10 2 image_refused_for_budget "$email" \
+    || fail "image request of overspent user was not refused by the budget check" # the request log is written asynchronously
 }
 
 image_refused_for_budget() {
@@ -188,7 +185,7 @@ assert_blocked_by_budget() {
 # the call: otherwise the request would reach the provider.
 check_school_budget_message_is_czech() {
   local alias key response
-  alias="smoke-$(date +%s)-$RANDOM"
+  alias=$(smoke_tag key)
   key=$(litellm_admin POST /key/generate "$(jq -cn --arg a "$alias" '{key_alias: $a, max_budget: 1, spend: 2, models: ["claude-haiku"]}')" \
     | jq -er .key) || fail "could not create temporary key $alias"
   on_exit_cleanup delete_litellm_key_alias "$alias"
@@ -285,10 +282,10 @@ check_spend_is_charged_to_the_staff_member() {
   create_temporary_staff_user "$email"
   on_exit_cleanup delete_litellm_customer "$email"
   api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL/api/chat/completions" \
-    '{"model":"claude-haiku","stream":false,"max_tokens":5,"messages":[{"role":"user","content":"ahoj"}]}' >/dev/null \
+    "$SMALL_CHAT" >/dev/null \
     || fail "staff member's request failed"
   sleep 5 # LiteLLM writes spend asynchronously
-  spend=$(litellm_admin GET "/customer/info?end_user_id=$email" | jq -r '.spend // 0')
+  spend=$(customer_spend "$email")
   awk -v s="$spend" 'BEGIN { exit !(s > 0) }' || fail "no spend recorded for $email"
   pass "spend is charged to the staff member ($spend USD)"
 }
@@ -303,7 +300,7 @@ check_staff_member_gets_an_image() {
     || fail "image generation failed: $(head -c 300 <<<"$response")"
   jq -e '.[0].url' <<<"$response" >/dev/null || fail "no image in response: $(head -c 300 <<<"$response")"
   sleep 5 # LiteLLM writes spend asynchronously
-  spend=$(litellm_admin GET "/customer/info?end_user_id=$email" | jq -r '.spend // 0')
+  spend=$(customer_spend "$email")
   awk -v s="$spend" 'BEGIN { exit !(s > 0) }' || fail "image was not charged to $email (spend $spend)"
   pass "a staff member gets an image from $IMAGE_MODEL, charged $spend USD"
 }

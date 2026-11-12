@@ -5,9 +5,9 @@
 # NOT for a server people are using: restoring rolls both databases back to the moment of the backup.
 # Free: nothing reaches a provider.
 set -euo pipefail
-. "$(dirname "$0")/lib.sh"
+. "$(dirname "$0")/test-lib.sh"
 
-readonly TAG="smoke-backup-$(date +%s)"
+readonly TAG=$(smoke_tag backup)
 readonly SPEND_EMAIL="$TAG@skolagaudi.cz"
 readonly SPEND_USD=1.23
 readonly FILE_CONTENT="$TAG file content"
@@ -26,30 +26,29 @@ create_chat() {
 }
 
 # Multipart upload, so not through api_request; the key still travels in a curl config, not argv.
+# upload_to_chat <file> <query string> prints the new file's id.
+upload_to_chat() {
+  curl -sS --fail-with-body -X POST "$OPENWEBUI_URL/api/v1/files/$2" \
+    --config <(printf 'header = "Authorization: Bearer %s"\n' "$OPENWEBUI_ADMIN_API_KEY") \
+    -F "file=@$1" | jq -er .id
+}
+
 upload_file() {
   local file="$BACKUP_ROOT/$TAG.txt"
   printf '%s' "$FILE_CONTENT" > "$file"
-  FILE_ID=$(curl -sS --fail-with-body -X POST "$OPENWEBUI_URL/api/v1/files/?process=false" \
-    --config <(printf 'header = "Authorization: Bearer %s"\n' "$OPENWEBUI_ADMIN_API_KEY") \
-    -F "file=@$file" | jq -er .id) || fail "could not upload the test file"
+  FILE_ID=$(upload_to_chat "$file" "?process=false") || fail "could not upload the test file"
   on_exit_cleanup openwebui_admin DELETE "/api/v1/files/$FILE_ID"
 }
 
 # This file is processed: Open WebUI embeds it with its own local model (free) into the search index.
 upload_searchable_file() {
-  local file="$BACKUP_ROOT/$TAG-sad.txt" attempt
+  local file="$BACKUP_ROOT/$TAG-sad.txt"
   printf '%s\n' "$SEARCH_TEXT" > "$file"
-  SEARCH_FILE_ID=$(curl -sS --fail-with-body -X POST "$OPENWEBUI_URL/api/v1/files/" \
-    --config <(printf 'header = "Authorization: Bearer %s"\n' "$OPENWEBUI_ADMIN_API_KEY") \
-    -F "file=@$file" | jq -er .id) || fail "could not upload the searchable test file"
+  SEARCH_FILE_ID=$(upload_to_chat "$file" "") || fail "could not upload the searchable test file"
   # Deleting the file alone leaves its vectors in the index, so they go first (they need the file's hash).
   on_exit_cleanup delete_search_entries "$SEARCH_FILE_ID"
   on_exit_cleanup openwebui_admin DELETE "/api/v1/files/$SEARCH_FILE_ID"
-  for attempt in $(seq 1 30); do # embedding runs in the background
-    file_search_finds_text && return 0
-    sleep 2
-  done
-  fail "file search never found the text of the uploaded file"
+  retry_until 30 2 file_search_finds_text || fail "file search never found the text of the uploaded file" # embedding runs in the background
 }
 
 delete_search_entries() {
@@ -100,7 +99,7 @@ lose_the_data() {
 
 chat_exists() { openwebui_admin GET "/api/v1/chats/$CHAT_ID" 2>/dev/null | jq -e --arg t "$TAG" '.title == $t' >/dev/null; }
 file_content() { openwebui_admin GET "/api/v1/files/$FILE_ID/content" 2>/dev/null || true; }
-recorded_spend() { litellm_admin GET "/customer/info?end_user_id=$SPEND_EMAIL" 2>/dev/null | jq -r '.spend // empty' || true; }
+recorded_spend() { customer_spend "$SPEND_EMAIL"; }
 
 # A damaged backup must be refused before anything is deleted (the current data stays).
 assert_damaged_backup_is_refused() {

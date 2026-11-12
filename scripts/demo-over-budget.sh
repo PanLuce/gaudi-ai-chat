@@ -4,7 +4,7 @@
 # (also on Ctrl+C). The same scenario runs automatically in scripts/smoke.sh.
 # Nothing reaches a provider: LiteLLM refuses the requests before calling Anthropic or Google.
 set -euo pipefail
-. "$(dirname "$0")/lib.sh"
+. "$(dirname "$0")/test-lib.sh"
 
 readonly DEMO_SPEND_USD=6 # above the $STAFF_BUDGET_USD budget
 
@@ -28,9 +28,9 @@ main() {
   require_tools docker curl jq openssl
   load_env
   local email password
-  email="smoke-demo-$(date +%s)@skolagaudi.cz"
+  email="$(smoke_tag demo)@skolagaudi.cz"
   password=$(openssl rand -hex 8)
-  create_demo_staff_account "$email" "$password" "Demo přes rozpočet"
+  create_staff_account "$email" "$password" "Demo přes rozpočet"
   create_temporary_customer "$email" "$DEMO_SPEND_USD"
   print_instructions "$email" "$password"
   wait_until_demo_is_done

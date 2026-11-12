@@ -4,7 +4,11 @@
 set -euo pipefail
 . "$(dirname "$0")/bootstrap.sh"
 
-readonly GENERATED_SECRETS="POSTGRES_PASSWORD LITELLM_DB_PASSWORD LITELLM_UI_PASSWORD OPENWEBUI_DB_PASSWORD WEBUI_SECRET_KEY WEBUI_ADMIN_PASSWORD OFFSITE_ENCRYPTION_PASSWORD"
+# Everything docker-compose.yml refuses to start without and says bootstrap makes, plus the secrets that
+# only scripts need (compose leaves the admin password optional; the backup password is for offsite.sh).
+GENERATED_SECRETS="$(grep -oE '\$\{[A-Z_]+:\?run scripts/bootstrap.sh\}' "$REPO_ROOT/docker-compose.yml" \
+  | sed -E 's/^\$\{([A-Z_]+):.*/\1/' | sort -u | xargs) WEBUI_ADMIN_PASSWORD OFFSITE_ENCRYPTION_PASSWORD"
+readonly GENERATED_SECRETS
 
 main_check() {
   local name lines
