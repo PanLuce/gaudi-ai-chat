@@ -54,6 +54,9 @@ header { display: grid; gap: 10px; }
 .phases button { font: 500 13px var(--font-body); border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
 .phases button.done { color: var(--accent); border-color: var(--accent); }
 .phases button.current { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.phase-steps { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.phase-steps button { font: 500 13px var(--font-body); border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); border-radius: 6px; padding: 3px 9px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.phase-steps button.current { background: var(--accent); color: var(--surface); }
 .count { font: 13px var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* The step card */
@@ -96,6 +99,7 @@ footer { color: var(--muted); font-size: 14px; }
   <section class="progress" aria-label="Postup">
     <div class="bar"><i id="bar"></i></div>
     <ul class="phases" id="phases"></ul>
+    <ul class="phase-steps" id="phase-steps" aria-label="Kroky této fáze"></ul>
     <span class="count" id="count"></span>
   </section>
 
@@ -112,7 +116,7 @@ footer { color: var(--muted); font-size: 14px; }
 <script id="guide-data">
 // One record per step. "where" says where to do it, "see" what you should see afterwards.
 const STEPS = [
-  { phase: "Příprava", title: "Co budeš potřebovat",
+  { phase: "Příprava", title: "Co budeš potřebovat", short: "Co budeš potřebovat",
     why: "Jako před vařením: nejdřív si připravíš všechny suroviny, pak už jen postupuješ podle receptu.",
     where: "Na svém počítači a ve správci hesel.",
     see: "Máš po ruce: přístup do administrace Gigaserveru (doména skolagaudi.cz), účet na GitHubu s přístupem k repu, klíč Anthropic z workspace openwebui s kreditem a klíč Gemini z placeného projektu.",
@@ -121,7 +125,7 @@ const STEPS = [
       { label: "Google AI Studio: klíč pro obrázky", url: "https://aistudio.google.com/apikey" },
       { label: "Gemini API: placená úroveň", url: "https://ai.google.dev/gemini-api/docs/billing" } ] },
 
-  { phase: "Server", title: "Založ účet a projekt u Hetzneru",
+  { phase: "Server", title: "Založ účet a projekt u Hetzneru", short: "Účet a projekt",
     why: "Hetzner pronajímá počítače v datacentru v Německu. Účet je jako nájemní smlouva, projekt je složka, kam se server uloží.",
     where: "V prohlížeči: hetzner.com/cloud → Sign up (účet na školu). Pak v Cloud Console → New project, název skolagaudi-ai.",
     see: "V Cloud Console je projekt skolagaudi-ai.",
@@ -129,7 +133,7 @@ const STEPS = [
       { label: "Hetzner Cloud", url: "https://www.hetzner.com/cloud/" },
       { label: "Hetzner Cloud Console", url: "https://console.hetzner.cloud/" } ] },
 
-  { phase: "Server", title: "Připrav si SSH klíč",
+  { phase: "Server", title: "Připrav si SSH klíč", short: "SSH klíč",
     why: "SSH klíč je klíč od dveří serveru. Veřejnou část dáš Hetzneru (zámek), soukromá zůstává jen u tebe.",
     where: "V terminálu na svém počítači. Pak v Cloud Console → projekt → Security → SSH keys → Add SSH key, vlož vypsaný řádek.",
     command: `ls ~/.ssh/id_ed25519.pub 2>/dev/null || ssh-keygen -t ed25519 -C "gaudi-ai"
@@ -138,14 +142,14 @@ cat ~/.ssh/id_ed25519.pub`,
     guides: [
       { label: "GitHub: jak vytvořit SSH klíč", url: "https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent" } ] },
 
-  { phase: "Server", title: "Založ firewall",
+  { phase: "Server", title: "Založ firewall", short: "Firewall",
     why: "Firewall je plot kolem serveru. Necháš v něm jen troje vrátka: pro správce (22) a pro web (80 a 443). Všechno ostatní zůstane zavřené.",
     where: "Cloud Console → Firewalls → Create Firewall, název gaudi-ai. Inbound rules: TCP 22, TCP 80, TCP 443 a UDP 443, zdroj Any IPv4 a Any IPv6.",
     see: "Firewall gaudi-ai se čtyřmi pravidly.",
     guides: [
       { label: "Hetzner: Creating a Firewall", url: "https://docs.hetzner.com/cloud/firewalls/getting-started/creating-a-firewall" } ] },
 
-  { phase: "Server", title: "Založ server",
+  { phase: "Server", title: "Založ server", short: "Server",
     why: "Teď si pronajmeš samotný počítač. Stačí malý: celý systém potřebuje asi 1,5 GB paměti, 8 GB dává pohodlnou rezervu.",
     where: "Cloud Console → Servers → Add Server: lokace v Německu (Falkenstein nebo Nuremberg), image Ubuntu 24.04, typ se sdíleným CPU a 8 GB RAM, SSH key z kroku výše, firewall gaudi-ai, název gaudi-ai.",
     see: "Server gaudi-ai běží a má veřejnou IPv4 adresu. Zapiš si ji, budeš ji potřebovat ve dvou dalších krocích.",
@@ -153,7 +157,7 @@ cat ~/.ssh/id_ed25519.pub`,
       { label: "Hetzner: Creating a Server", url: "https://docs.hetzner.com/cloud/servers/getting-started/creating-a-server" },
       { label: "Hetzner: přehled serverů", url: "https://docs.hetzner.com/cloud/servers/overview" } ] },
 
-  { phase: "Server", title: "Pojmenuj server ve svém počítači",
+  { phase: "Server", title: "Pojmenuj server ve svém počítači", short: "Jméno v počítači",
     why: "Místo pamatování IP adresy dáš serveru přezdívku. Pak stačí psát ssh gaudi-ai.",
     where: "V terminálu na svém počítači. Příkaz se zeptá na IP adresu serveru; najdeš ji v Hetzner Cloud Console → Servers → gaudi-ai (Public IP).",
     command: `read -r -p "IP adresa serveru: " SERVER_IP
@@ -163,7 +167,7 @@ ssh -o StrictHostKeyChecking=accept-new gaudi-ai-root 'hostname'`,
     guides: [
       { label: "Hetzner: Connecting to the Server", url: "https://docs.hetzner.com/cloud/servers/getting-started/connecting-to-the-server" } ] },
 
-  { phase: "Adresa", title: "Nasměruj ai.skolagaudi.cz na server",
+  { phase: "Adresa", title: "Nasměruj ai.skolagaudi.cz na server", short: "DNS záznam",
     why: "Adresa je jako jmenovka na zvonku. Dnes ai.skolagaudi.cz vede na web školy; musí ukazovat na nový server, jinak lidé zazvoní jinde. Vchod si podle ní sám vyřídí zámek (HTTPS certifikát).",
     where: "Administrace Gigaserveru → doména skolagaudi.cz → DNS záznamy → přidat záznam: název ai, typ A, hodnota IP serveru, TTL 3600. Když editor DNS nenajdeš, napiš podpoře: „Prosím o přidání záznamu typu A: ai.skolagaudi.cz → IP serveru, TTL 3600.“",
     command: `dig +short ai.skolagaudi.cz`,
@@ -174,7 +178,7 @@ ssh -o StrictHostKeyChecking=accept-new gaudi-ai-root 'hostname'`,
       { label: "Gigaserver: jak kontaktovat podporu", url: "https://kb.gigaserver.cz/jak-spravne-kontaktovat-technickou-podporu" },
       { label: "Caddy: automatické HTTPS", url: "https://caddyserver.com/docs/automatic-https" } ] },
 
-  { phase: "Příprava serveru", title: "Nainstaluj Docker",
+  { phase: "Příprava serveru", title: "Nainstaluj Docker", short: "Docker",
     why: "Docker je jako přepravní kontejnery: každá část systému přijede ve vlastní krabici se vším, co potřebuje, a na serveru se jen postaví vedle sebe.",
     where: "Na serveru jako root: ssh gaudi-ai-root. Příkazy jsou z oficiálního návodu Dockeru pro Ubuntu.",
     command: `apt-get update && apt-get upgrade -y
@@ -190,7 +194,7 @@ docker compose version`,
     guides: [
       { label: "Docker: Install Docker Engine on Ubuntu", url: "https://docs.docker.com/engine/install/ubuntu/" } ] },
 
-  { phase: "Příprava serveru", title: "Založ uživatele gaudi",
+  { phase: "Příprava serveru", title: "Založ uživatele gaudi", short: "Uživatel gaudi",
     why: "Na serveru nebudeš běžně pracovat jako root (správce všeho). Uživatel gaudi smí jen spouštět kontejnery, nic víc.",
     where: "Na serveru jako root: ssh gaudi-ai-root.",
     command: `adduser --disabled-password --gecos "" gaudi
@@ -201,7 +205,7 @@ exit`,
     guides: [
       { label: "Docker: Linux post-installation steps", url: "https://docs.docker.com/engine/install/linux-postinstall/" } ] },
 
-  { phase: "Kód", title: "Dej serveru přístup ke kódu",
+  { phase: "Kód", title: "Dej serveru přístup ke kódu", short: "Přístup ke kódu",
     why: "Repo je soukromé. Server dostane vlastní klíč, který smí kód jen číst, a když ho někdy zrušíš, nic jiného se nerozbije.",
     where: "Na serveru jako gaudi: ssh gaudi-ai. Vypsaný řádek vlož na GitHubu → repo openwebui-local → Settings → Deploy keys → Add deploy key, název gaudi-ai, bez zaškrtnutí Allow write access.",
     command: `ssh-keygen -t ed25519 -f ~/.ssh/github_deploy -N "" -C "gaudi-ai-deploy"
@@ -212,7 +216,7 @@ cat ~/.ssh/github_deploy.pub`,
       { label: "GitHub: Managing deploy keys", url: "https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys" },
       { label: "Deploy keys repa openwebui-local", url: "https://github.com/PanLuce/openwebui-local/settings/keys" } ] },
 
-  { phase: "Kód", title: "Stáhni kód na server",
+  { phase: "Kód", title: "Stáhni kód na server", short: "Stažení kódu",
     why: "Teď si server kód skutečně stáhne. Od té doby ho jen aktualizuješ.",
     where: "Na serveru jako gaudi: ssh gaudi-ai.",
     command: `git clone git@github.com:PanLuce/openwebui-local.git ~/openwebui-local
@@ -221,7 +225,7 @@ ls ~/openwebui-local/scripts`,
     guides: [
       { label: "Kód systému na GitHubu", url: "https://github.com/PanLuce/openwebui-local" } ] },
 
-  { phase: "Hesla", title: "Vyplň .env", manual: true,
+  { phase: "Hesla", title: "Vyplň .env", short: "Vyplnění .env", manual: true,
     why: "Soubor .env je trezor s klíči. Nové prostředí dostane nová hesla; ta, která jsou prázdná, vygeneruje bootstrap sám.",
     where: "Na serveru jako gaudi, sám (ne přes Claude). Příkaz sed zapíše nová hesla a adresu rovnou do souboru, nic nevypíše. V editoru nano pak vlož za rovnítko jen ANTHROPIC_API_KEY (Anthropic Console → workspace openwebui → API keys) a GEMINI_API_KEY (Google AI Studio → API keys). Ulož Ctrl+O, zavři Ctrl+X. OPENWEBUI_ADMIN_API_KEY nech prázdný.",
     command: `cd ~/openwebui-local
@@ -234,7 +238,7 @@ grep -cE '^ANTHROPIC_API_KEY=sk-ant-api|^GEMINI_API_KEY=AIza' .env`,
       { label: "Anthropic Console: workspaces", url: "https://console.anthropic.com/settings/workspaces" },
       { label: "Google AI Studio: API keys", url: "https://aistudio.google.com/apikey" } ] },
 
-  { phase: "Spuštění", title: "Spusť systém",
+  { phase: "Spuštění", title: "Spusť systém", short: "Spuštění",
     why: "Bootstrap je jako zapnutí školy ráno: odemkne, rozsvítí, vygeneruje chybějící hesla a pustí všechny části v pořadí, v jakém se potřebují.",
     where: "Na serveru jako gaudi.",
     command: `cd ~/openwebui-local
@@ -244,7 +248,7 @@ curl -sI https://ai.skolagaudi.cz/health | head -1`,
     guides: [
       { label: "Caddy: automatické HTTPS", url: "https://caddyserver.com/docs/automatic-https" } ] },
 
-  { phase: "Spuštění", title: "Založ první účet (správce)", manual: true,
+  { phase: "Spuštění", title: "Založ první účet (správce)", short: "První účet", manual: true,
     why: "První účet, který se zaregistruje, je správce. Udělej to hned, ať ho nezaloží nikdo jiný.",
     where: "V prohlížeči na https://ai.skolagaudi.cz → zaregistruj se. Pak Nastavení → Účet → API klíče → Vytvořit nový klíč. Na serveru ho vlož do .env za OPENWEBUI_ADMIN_API_KEY= a spusť bootstrap znovu.",
     command: `cd ~/openwebui-local
@@ -254,7 +258,7 @@ scripts/bootstrap.sh`,
     guides: [
       { label: "Open WebUI: dokumentace", url: "https://docs.openwebui.com/" } ] },
 
-  { phase: "Kontrola", title: "Ověř, že vše funguje",
+  { phase: "Kontrola", title: "Ověř, že vše funguje", short: "Kontrola",
     why: "Kontrolní seznam před odletem. Ověří každou část včetně skutečné odpovědi modelu a jednoho obrázku; stojí to pár centů.",
     where: "Na serveru jako gaudi. Poskytovatelé musí mít kredit.",
     command: `cd ~/openwebui-local
@@ -263,7 +267,7 @@ scripts/smoke.sh --paid`,
     guides: [
       { label: "LiteLLM: rozpočty uživatelů", url: "https://docs.litellm.ai/docs/proxy/users" } ] },
 
-  { phase: "Kontrola", title: "Podívej se do Brány",
+  { phase: "Kontrola", title: "Podívej se do Brány", short: "Brána",
     why: "Brána na internet nevidí. Podíváš se do ní tunelem: tvůj počítač si na chvíli půjčí její okénko.",
     where: "V terminálu na svém počítači; dokud tunel běží, otevři v prohlížeči http://127.0.0.1:4000/ui (uživatel admin, heslo LITELLM_UI_PASSWORD z .env na serveru).",
     command: `ssh -N -L 4000:127.0.0.1:4000 gaudi-ai`,
@@ -271,7 +275,7 @@ scripts/smoke.sh --paid`,
     guides: [
       { label: "ssh: volba -L (tunel)", url: "https://man.openbsd.org/ssh" } ] },
 
-  { phase: "Zálohy", title: "Zapni noční zálohu",
+  { phase: "Zálohy", title: "Zapni noční zálohu", short: "Noční záloha",
     why: "Záloha je fotka všech dat. Každou noc se udělá nová a drží se posledních 14.",
     where: "Na serveru jako gaudi. V crontab -e přidej na konec řádek ze druhého příkazu.",
     command: `cd ~/openwebui-local && mkdir -p backups && scripts/backup.sh
@@ -281,7 +285,7 @@ crontab -e`,
     guides: [
       { label: "crontab: formát řádku", url: "https://manpages.ubuntu.com/manpages/noble/en/man5/crontab.5.html" } ] },
 
-  { phase: "Zálohy", title: "Ulož .env do správce hesel", manual: true,
+  { phase: "Zálohy", title: "Ulož .env do správce hesel", short: "Uložení .env", manual: true,
     why: "Záloha bez klíčů je trezor bez klíče. .env v záloze záměrně není, takže jeho kopie musí být ve správci hesel.",
     where: "V terminálu na svém počítači, sám (ne přes Claude). Příkaz jen ukáže obsah souboru ze serveru, nic neukládá. Výpis zkopíruj do správce hesel jako bezpečnou poznámku a pak okno terminálu vyčisti (Cmd+K nebo příkaz clear).",
     command: `ssh gaudi-ai 'cat openwebui-local/.env'`,
@@ -289,26 +293,26 @@ crontab -e`,
     guides: [
       { label: "ssh: dokumentace", url: "https://man.openbsd.org/ssh" } ] },
 
-  { phase: "Zálohy", title: "Zálohy mimo server (Google Drive)", todo: true,
+  { phase: "Zálohy", title: "Zálohy mimo server (Google Drive)", short: "Mimo server", todo: true,
     why: "Kdyby server zmizel, zmizí i zálohy na něm. Kopie musí být i jinde.",
     where: "Doplní se v samostatném kroku vývoje.",
     see: "Před ostrým provozem musí být hotové.",
     guides: [] },
 
-  { phase: "Zálohy", title: "Hlídání dostupnosti", todo: true,
+  { phase: "Zálohy", title: "Hlídání dostupnosti", short: "Dostupnost", todo: true,
     why: "Hlídač pošle e-mail, když chat přestane odpovídat, dřív než si toho všimnou lidé.",
     where: "Doplní se v samostatném kroku vývoje.",
     see: "",
     guides: [] },
 
-  { phase: "Předání", title: "Předej chat lidem",
+  { phase: "Předání", title: "Předej chat lidem", short: "Předání",
     why: "Až kontrola svítí zeleně, otevřeš dveře. Lidé se zaregistrují a ty je schválíš.",
     where: "Pošli kolegům odkaz https://ai.skolagaudi.cz. Kdo se zaregistruje, čeká na schválení: Chat → Admin Panel → Users → změnit roli na user.",
     see: "Schválený kolega píše s Claude Haiku; v Bráně se mu počítá útrata.",
     guides: [
       { label: "Open WebUI: dokumentace", url: "https://docs.openwebui.com/" } ] },
 
-  { phase: "Údržba", title: "Aktualizace",
+  { phase: "Údržba", title: "Aktualizace", short: "Aktualizace",
     why: "Jako servis auta: nejdřív záloha, pak výměna dílů, pak zkušební jízda.",
     where: "Na serveru jako gaudi. Jednou za měsíc i systém serveru: ssh gaudi-ai-root 'apt-get update && apt-get upgrade -y'.",
     command: `cd ~/openwebui-local
@@ -342,6 +346,13 @@ function promptFor(step, index) {
   if (step.guides.length) parts.push("Oficiální návod:\n" + step.guides.map((guide) => `- ${guide.label}: ${guide.url}`).join("\n"));
   parts.push(PROMPT_RULES);
   return parts.join("\n\n");
+}
+
+// The row under the phase buttons: every step of one phase, by number and short name.
+function phaseSteps(phase) {
+  return STEPS.map((step, index) => ({ step, index }))
+    .filter(({ step }) => step.phase === phase)
+    .map(({ step, index }) => ({ index, label: `${index + 1} ${step.short}` }));
 }
 
 // A phase button jumps to the phase's first step, so it names the steps it covers: "Server · 2–6".
@@ -482,8 +493,22 @@ function renderProgress() {
     item.appendChild(button);
     phases.appendChild(item);
   });
+  renderPhaseSteps(STEPS[current].phase);
   document.getElementById("back").disabled = current === 0;
   document.getElementById("next").disabled = current === STEPS.length - 1;
+}
+
+function renderPhaseSteps(phase) {
+  const row = document.getElementById("phase-steps");
+  row.replaceChildren();
+  phaseSteps(phase).forEach(({ index, label }) => {
+    const item = element("li");
+    const button = element("button", index === current ? "current" : "", label);
+    button.type = "button";
+    button.addEventListener("click", () => go(index));
+    item.appendChild(button);
+    row.appendChild(item);
+  });
 }
 
 function go(index) {

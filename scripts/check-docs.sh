@@ -126,6 +126,31 @@ JS
   pass "docs/nasazeni.html: every phase button names its steps"
 }
 
+check_guide_phase_steps() {
+  node - "$REPO_ROOT/docs/nasazeni.html" <<'JS' || fail "docs/nasazeni.html: a phase does not list all its steps"
+const fs = require("fs"), vm = require("vm");
+const html = fs.readFileSync(process.argv[2], "utf8");
+const data = html.match(/<script id="guide-data">([\s\S]*?)<\/script>/)[1];
+const context = {};
+vm.runInNewContext(data + "\nthis.STEPS = STEPS; this.phaseSteps = typeof phaseSteps === 'function' ? phaseSteps : null;", context);
+if (!context.phaseSteps) { console.error("✗ no phaseSteps(phase) in guide-data"); process.exit(1); }
+// The row under the phase buttons must offer every step of the current phase, by number and a short name.
+let failed = false;
+context.STEPS.forEach((step, index) => {
+  if (!step.short || step.short.length > 24) {
+    failed = true; console.error(`✗ step ${index + 1} (${step.title}): short name missing or longer than 24 characters`);
+  }
+});
+[...new Set(context.STEPS.map((step) => step.phase))].forEach((phase) => {
+  const wanted = context.STEPS.map((step, index) => step.phase === phase ? `${index}|${index + 1} ${step.short}` : null).filter(Boolean).join(",");
+  const got = context.phaseSteps(phase).map((item) => `${item.index}|${item.label}`).join(",");
+  if (got !== wanted) { failed = true; console.error(`✗ phase ${phase}: row "${got}", wanted "${wanted}"`); }
+});
+process.exit(failed ? 1 : 0);
+JS
+  pass "docs/nasazeni.html: every phase lists all its steps"
+}
+
 main() {
   require_tools curl grep node
   local page
@@ -139,6 +164,7 @@ main() {
   done
   check_guide_prompts
   check_guide_phases
+  check_guide_phase_steps
 }
 
 main "$@"
