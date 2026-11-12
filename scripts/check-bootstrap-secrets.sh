@@ -30,6 +30,27 @@ main_check() {
   message=$( (require_admin_email) 2>&1 ) && fail "bootstrap goes on without WEBUI_ADMIN_EMAIL in .env"
   grep -q "add WEBUI_ADMIN_EMAIL=" <<<"$message" || fail "bootstrap does not say what to add to .env (got: $message)"
   pass "without the admin e-mail, bootstrap stops and says what to add"
+  assert_failed_lookup_keeps_model_settings
+}
+
+# The admin's model names and visibility live only in Chat; bootstrap may create an entry, never reset one.
+# Chat is replaced by stand-ins: the lookup answers with the given HTTP status, and any POST is recorded.
+seed_with_lookup_status() (
+  posts=$1 lookup_status=$2
+  openwebui_admin_status() { echo "$lookup_status"; }
+  openwebui_admin() { [ "$1" = GET ] && return 22; echo "$*" >> "$posts"; }
+  seed_model_entry smoke-model "Smoke model" all
+)
+
+assert_failed_lookup_keeps_model_settings() {
+  local posts message
+  posts=$(mktemp)
+  on_exit_cleanup rm -f "$posts"
+  message=$(seed_with_lookup_status "$posts" 500 2>&1) && fail "bootstrap goes on when Chat cannot say whether a model entry exists"
+  [ ! -s "$posts" ] || fail "a failed lookup made bootstrap reset the model entry: $(cat "$posts")"
+  seed_with_lookup_status "$posts" 404 >/dev/null 2>&1 || fail "bootstrap does not create a missing model entry"
+  grep -q "access/update" "$posts" || fail "bootstrap did not create the missing model entry"
+  pass "when Chat does not answer, bootstrap stops instead of resetting the admin's model settings"
 }
 
 main_check "$@"

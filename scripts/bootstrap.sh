@@ -88,9 +88,22 @@ ensure_staff_budget() {
   info "staff budget: \$$STAFF_BUDGET_USD per 30 days ($STAFF_BUDGET_ID)"
 }
 
+# The HTTP status of an admin GET to Open WebUI; 000 when it does not answer at all.
+openwebui_admin_status() {
+  curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
+    --config <(printf 'header = "Authorization: Bearer %s"\n' "$OPENWEBUI_ADMIN_API_KEY") "$OPENWEBUI_URL$1" || true
+}
+
 # Open WebUI shows a connection model only to admins until it has its own entry with access rules.
+# Only "not found" means missing: a failed lookup must stop bootstrap, never reset the admin's settings.
 model_entry_exists() {
-  openwebui_admin GET "/api/v1/models/model?id=$1" 2>/dev/null | jq -e '.id' >/dev/null
+  local status
+  status=$(openwebui_admin_status "/api/v1/models/model?id=$1")
+  case "$status" in
+    200) return 0 ;;
+    404) return 1 ;;
+    *) fail "could not look up model entry $1 in Open WebUI (HTTP $status); nothing was changed" ;;
+  esac
 }
 
 # Creates the model's entry with its initial name and visibility; existing entries are left as they are.
