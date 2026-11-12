@@ -8,7 +8,6 @@ set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 readonly BACKUPS_KEPT=14
-BACKUP_ROOT="${BACKUP_ROOT:-$REPO_ROOT/backups}"
 
 dump_database() {
   compose exec -T postgres pg_dump -U postgres -Fc "$1" > "$2/$1.dump" || fail "could not dump database $1"

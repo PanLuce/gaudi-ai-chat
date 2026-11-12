@@ -29,6 +29,8 @@ stejná sestava jako v produkci; liší se jen hodnoty v `.env`.
 | `scripts/backup.sh` | Záloha obou databází a souborů Open WebUI do `backups/<čas>/`, drží posledních 14. |
 | `scripts/restore.sh <adresář>` | Obnova ze zálohy; vše od zálohy se ztratí (ptá se, `--yes` bez ptaní). Nejdřív celou zálohu přečte nanečisto — poškozenou odmítne a nic nezmění — a uloží aktuální stav jako další zálohu, takže jde vrátit i obnova. |
 | `scripts/check-backup-restore.sh` | Ověří, že záloha vrátí smazaný chat, soubor i útratu a že poškozenou zálohu obnova odmítne. **Ne na serveru v provozu** — obnova vrací databáze do okamžiku zálohy. Zdarma. |
+| `scripts/offsite.sh upload \| list \| download <čas>` | Zašifrovaná kopie nejnovější zálohy na sdílený disk školy na Google Drive (drží posledních 30); `list` ukáže zálohy na Drive a stáří nejnovější; `download` stáhne zálohu do `backups/<čas>/` pro `restore.sh`. Nastavení viz Zálohy. |
+| `scripts/check-offsite.sh` | Vždy (offline, zdarma): bez nastavení Drive se `offsite.sh` zastaví s větou, co doplnit; rclone dostane sdílený disk, klíč a heslo k šifře. S nastavením Drive v `.env` navíc nahraje skutečnou zálohu, stáhne ji zpět a porovná. |
 | `scripts/smoke.sh --paid` | Navíc ověří skutečné odpovědi modelů (1 malý placený požadavek na kontrolu). **Musí projít, než službu začne někdo používat.** |
 
 ## Adresy
@@ -115,3 +117,22 @@ Po dobu uložení databáze `openwebui` a souborů je Chat zastavený (dnes ~15 
 `chat stopped for N s`), aby databáze a soubory byly ze stejné chvíle a index se nekopíroval během zápisu.
 `.env` v záloze není — kopie patří do správce hesel, obnova na jiném serveru ji potřebuje.
 Na serveru: denně z cronu ve 2:30 (krátký výpadek v noci) a kopie mimo server (krok nasazení).
+
+### Kopie mimo server
+
+Hned po noční záloze `scripts/offsite.sh upload` nahraje zálohu zašifrovanou (rclone `crypt`) na sdílený
+disk školy na Google Drive; drží se posledních 30 záloh (při výpadcích tedy pokryjí víc než 30 dní).
+Zapisuje servisní účet, ne člověk ([ADR 0003](docs/adr/0003-zalohy-mimo-server.md)). V `.env`:
+`OFFSITE_DRIVE_ID` (ID sdíleného disku), `OFFSITE_SERVICE_ACCOUNT_FILE` (klíč robota, `secrets/`, mimo git)
+a `OFFSITE_ENCRYPTION_PASSWORD` (vygeneruje bootstrap). **Bez toho hesla se ze zálohy na Drive nic
+neobnoví** — patří do správce hesel spolu s celým `.env`. Bez nastavení se `offsite.sh` zastaví s větou,
+co doplnit; nikdy kopii tiše nepřeskočí.
+
+Obnova z Google Drive (třeba na novém serveru: nejdřív kód, `.env` ze správce hesel, klíč robota do
+`secrets/` a `scripts/bootstrap.sh`):
+
+```sh
+scripts/offsite.sh list                       # vyber čas zálohy, např. 20261112T023000Z
+scripts/offsite.sh download 20261112T023000Z  # → backups/20261112T023000Z/
+scripts/restore.sh backups/20261112T023000Z
+```

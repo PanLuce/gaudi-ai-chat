@@ -125,6 +125,7 @@ wait_until_demo_is_done() {
 readonly APP_DATABASES="litellm openwebui"
 # Open WebUI's own files: uploads and the vector index. cache/ (downloaded models) is re-created on start.
 readonly OPENWEBUI_VOLUME="open-webui-data"
+BACKUP_ROOT="${BACKUP_ROOT:-$REPO_ROOT/backups}" # backup.sh writes here, offsite.sh uploads from here
 
 compose_volume_name() { compose config --format json | jq -er --arg v "$1" '.volumes[$v].name'; }
 # Backup and restore use the postgres image for tar, so they need no extra image.
