@@ -258,6 +258,19 @@ JS
   pass "docs/nasazeni.html: the guide matches closed sign-up, the backup keys and the provider caps"
 }
 
+# On a new server the old .env holds keys that exist only in the old databases, so bootstrap can run only
+# after the restore has brought them back.
+check_readme_restore_order() {
+  local recipe restore_line bootstrap_line
+  recipe=$(awk '/^### Obnova z Google Drive/{on=1} on && /^```sh/{code=1; next} code && /^```/{exit} code' "$REPO_ROOT/README.md")
+  [ -n "$recipe" ] || fail "README.md has no ### Obnova z Google Drive with a sh block"
+  restore_line=$(grep -n 'scripts/restore.sh' <<<"$recipe" | head -1 | cut -d: -f1)
+  bootstrap_line=$(grep -n 'scripts/bootstrap.sh' <<<"$recipe" | head -1 | cut -d: -f1)
+  [ -n "$restore_line" ] && [ -n "$bootstrap_line" ] && [ "$bootstrap_line" -gt "$restore_line" ] \
+    || fail "README.md: the restore from Google Drive must run scripts/bootstrap.sh after scripts/restore.sh"
+  pass "README.md: the restore from Google Drive runs bootstrap only after the databases are back"
+}
+
 main() {
   require_tools curl gh grep node
   local page
@@ -275,6 +288,7 @@ main() {
   check_overview_trip
   check_guide_offsite_copy
   check_guide_matches_the_stack
+  check_readme_restore_order
 }
 
 main "$@"

@@ -1,5 +1,7 @@
 # Návod pro správce Google Workspace: přihlášení do AI chatu přes Google
 
+> **Stav:** připravuje se (issue #3). Dokud aplikace přihlášení přes Google nemá, zakládá účty správce chatu.
+
 Zaměstnanci se budou do školního AI chatu přihlašovat **svým školním Google účtem** (`@skolagaudi.cz`).
 K tomu je potřeba jednou založit „OAuth klienta“ v Google Cloudu školy. Zabere to asi 15 minut a nic
 to nestojí.

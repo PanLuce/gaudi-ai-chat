@@ -3,9 +3,7 @@
 # Usage: scripts/offsite.sh upload             → copies the newest backups/<UTC time>/, keeps the newest 30 on Drive
 #        scripts/offsite.sh list               → the backups on Drive and how old the newest one is
 #        scripts/offsite.sh download <UTC time> → backups/<UTC time>/, then scripts/restore.sh restores it
-# .env: OFFSITE_DRIVE_ID (the shared drive), OFFSITE_SERVICE_ACCOUNT_FILE (the robot's key, outside git),
-# OFFSITE_ENCRYPTION_PASSWORD (bootstrap.sh makes it; without it nothing on Drive can be read — keep it
-# in the password manager with the rest of .env). docs/adr/0003-zalohy-mimo-server.md says why.
+# Settings in .env and the restore recipe: README.md, Kopie mimo server. Why: docs/adr/0003-zalohy-mimo-server.md.
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
