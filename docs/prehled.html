@@ -1,0 +1,230 @@
+<title>AI chat Gaudi</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column. The path of one question runs left to right (top to bottom on a phone);
+   the parts behind the scenes sit in a second row; the detail card sits under the picture. */
+:root {
+  --bg: #f5f7f6;
+  --surface: #ffffff;
+  --fg: #18201d;
+  --muted: #5a6661;
+  --line: #d9e0dc;
+  --accent: #1f6f5c;
+  --accent-soft: #e1efe9;
+  --person: #eef1ef;
+  --provider: #f2e9f6;
+  --provider-line: #c7a6d4;
+  --bubble-bg: #18201d;
+  --bubble-fg: #f5f7f6;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111614; --surface: #19201d; --fg: #e3e9e6; --muted: #98a6a0; --line: #2b3531;
+    --accent: #5cc0a3; --accent-soft: #1c3029; --person: #222a27; --provider: #2a2030; --provider-line: #6f557c;
+    --bubble-bg: #e3e9e6; --bubble-fg: #111614;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111614; --surface: #19201d; --fg: #e3e9e6; --muted: #98a6a0; --line: #2b3531;
+  --accent: #5cc0a3; --accent-soft: #1c3029; --person: #222a27; --provider: #2a2030; --provider-line: #6f557c;
+  --bubble-bg: #e3e9e6; --bubble-fg: #111614;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font: 16px/1.6 var(--font-body); margin: 0; }
+.page { max-width: 1040px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 64px; display: grid; gap: 36px; }
+h1, h2 { font-family: var(--font-display); margin: 0; line-height: 1.15; text-wrap: balance; }
+h1 { font-size: clamp(28px, 5vw, 44px); }
+h2 { font-size: 22px; }
+p { margin: 0; max-width: 66ch; }
+a { color: var(--accent); }
+.lead { color: var(--muted); font-size: 18px; }
+.eyebrow { font: 500 12px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+header { display: grid; gap: 12px; }
+
+/* The picture */
+.map { display: grid; gap: 18px; }
+.path { display: flex; align-items: stretch; gap: 0; }
+.path > li { list-style: none; display: flex; align-items: center; flex: 1 1 0; min-width: 0; }
+.path { margin: 0; padding: 0; }
+.arrow { flex: none; width: 28px; text-align: center; color: var(--muted); font-size: 20px; }
+.node { position: relative; width: 100%; min-width: 0; display: grid; gap: 4px; text-align: left; cursor: pointer;
+  background: var(--accent-soft); color: var(--fg); border: 1.5px solid transparent; border-radius: 12px; padding: 14px; font: inherit; }
+.node .name { font: 600 18px var(--font-display); }
+.node .tech { font: 13px var(--font-mono); color: var(--muted); }
+.node .short { font-size: 14px; color: var(--muted); }
+.node.person { background: var(--person); }
+.node.provider { background: var(--provider); border-color: var(--provider-line); }
+.node:hover, .node[aria-pressed="true"] { border-color: var(--accent); }
+.node:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.backstage { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-left: calc((100% - 4 * 28px) / 5 * 2 + 2 * 28px); }
+.backstage .node { background: var(--surface); border: 1.5px dashed var(--line); }
+.backstage .node:hover, .backstage .node[aria-pressed="true"] { border-color: var(--accent); border-style: solid; }
+.backstage-label { font: 500 12px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); grid-column: 1 / -1; }
+
+/* The bubble on hover (only where a mouse can hover) */
+.bubble { display: none; }
+@media (hover: hover) {
+  .node .bubble { display: block; visibility: hidden; opacity: 0; position: absolute; left: 0; top: calc(100% + 8px); z-index: 5;
+    width: max(100%, 260px); background: var(--bubble-bg); color: var(--bubble-fg); border-radius: 10px; padding: 12px 14px;
+    font-size: 14px; line-height: 1.5; box-shadow: 0 8px 24px rgb(0 0 0 / 0.18); transition: opacity 0.12s; pointer-events: none; }
+  .node:hover .bubble, .node:focus-visible .bubble { visibility: visible; opacity: 1; }
+  .path > li:last-child .bubble { left: auto; right: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .bubble { transition: none; } }
+
+/* The detail card */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: grid; gap: 12px; min-width: 0; }
+.card h2 { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.card h2 .tech { font: 14px var(--font-mono); color: var(--muted); font-weight: 400; }
+.links { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.links li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; min-width: 0; }
+.links a, .links .nolink { font: 15px var(--font-mono); overflow-wrap: anywhere; }
+.links .nolink { color: var(--muted); }
+.badge { font: 500 12px var(--font-mono); padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+.badge.later { background: var(--provider); color: var(--fg); }
+.hint { color: var(--muted); font-size: 14px; }
+
+/* The trip of one question */
+.trip { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: trip; }
+.trip li { counter-increment: trip; display: grid; grid-template-columns: 2rem 1fr; gap: 10px; align-items: baseline; }
+.trip li::before { content: counter(trip); font: 600 15px var(--font-mono); color: var(--accent); }
+footer { color: var(--muted); font-size: 14px; display: grid; gap: 6px; }
+
+/* Phone: the path runs top to bottom */
+@media (max-width: 760px) {
+  .path { flex-direction: column; }
+  .path > li { flex-direction: column; width: 100%; }
+  .arrow { width: auto; height: 26px; line-height: 26px; transform: rotate(90deg); }
+  .backstage { margin-left: 0; grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="page">
+  <header>
+    <span class="eyebrow">Škola Gaudi · AI chat pro zaměstnance</span>
+    <h1>Z čeho je náš AI chat</h1>
+    <p class="lead">Šest částí, každá má jeden úkol. Najeď myší na část (na telefonu ťukni) a uvidíš, co dělá a kde ji najdeš.</p>
+  </header>
+
+  <section class="map" aria-label="Schéma systému">
+    <ol class="path" id="path"></ol>
+    <div class="backstage" id="backstage"><span class="backstage-label">Za scénou</span></div>
+  </section>
+
+  <section class="card" id="card" aria-live="polite"></section>
+
+  <section class="card">
+    <h2>Cesta jednoho dotazu</h2>
+    <ol class="trip">
+      <li>Zaměstnanec napíše otázku v prohlížeči.</li>
+      <li><b>Vchod</b> ji přijme zamčeným spojením a pustí dál jen do Chatu.</li>
+      <li><b>Chat</b> otázku uloží do Databáze a pošle ji Bráně spolu s e-mailem toho, kdo se ptá.</li>
+      <li><b>Brána</b> zkontroluje, že člověk ještě nevyčerpal svých 5 $ na měsíc, a pošle otázku Poskytovateli.</li>
+      <li><b>Poskytovatel</b> odpoví. Brána připíše cenu odpovědi tomu člověku a Chat ukáže odpověď.</li>
+    </ol>
+  </section>
+
+  <footer>
+    <span>Adresy označené „dnes“ fungují jen na počítači, kde systém právě běží. Adresy „po nasazení“ začnou fungovat, až bude systém na serveru.</span>
+    <span>Kód systému: <a href="https://github.com/PanLuce/openwebui-local">github.com/PanLuce/openwebui-local</a> (soukromý). Doménu skolagaudi.cz spravuje <a href="https://www.gigaserver.cz/">Gigaserver</a>.</span>
+  </footer>
+</div>
+
+<script>
+// One record per part; the picture, the bubbles and the card all come from here.
+const PARTS = [
+  { id: "zamestnanec", name: "Zaměstnanec", tech: "prohlížeč", kind: "person", place: "path",
+    short: "Píše otázky.",
+    laik: "Kdokoli ze školy s účtem. Stačí mu prohlížeč, nic se neinstaluje.",
+    links: [] },
+  { id: "vchod", name: "Vchod", tech: "Caddy", place: "path",
+    short: "Jediné dveře dovnitř.",
+    laik: "Jediné dveře do systému, jako vrátnice. Zamyká spojení (HTTPS), takže po cestě nikdo nečte, a jinými dveřmi nikoho nepustí.",
+    links: [
+      { when: "dnes", url: "http://localhost" },
+      { when: "po nasazení", url: "https://ai.skolagaudi.cz" } ] },
+  { id: "chat", name: "Chat", tech: "Open WebUI", place: "path",
+    short: "Okno, kde se píše s AI.",
+    laik: "To, co lidé vidí: okno pro psaní s AI, historie chatů, nahrané soubory a účty. Správce tu nastavuje, kdo vidí které modely. Chaty ostatních správce číst nemůže.",
+    links: [
+      { when: "dnes", url: "http://localhost", note: "přes Vchod" },
+      { when: "dnes · správa", url: "http://localhost/admin" },
+      { when: "po nasazení", url: "https://ai.skolagaudi.cz" } ] },
+  { id: "brana", name: "Brána", tech: "LiteLLM", place: "path",
+    short: "Hlídá peníze a klíče.",
+    laik: "Pokladna. Každý dotaz jde přes ni: připíše cenu na e-mail toho, kdo se ptá, a zastaví každého, kdo za měsíc vyčerpá 5 $. Jen Brána zná klíče k Poskytovatelům.",
+    links: [
+      { when: "dnes", url: "http://127.0.0.1:4000/ui", note: "přihlášení admin, heslo v .env" },
+      { when: "po nasazení", url: null, note: "jen přes zabezpečený tunel ze správcova počítače" } ] },
+  { id: "poskytovatele", name: "Poskytovatelé", tech: "Anthropic · Google", kind: "provider", place: "path",
+    short: "Samotná umělá inteligence.",
+    laik: "Firmy, které mají AI modely. Anthropic odpovídá textem (Claude Haiku, Sonnet, Opus), Google kreslí obrázky (Gemini). Platí se jim podle spotřeby; každá má navíc vlastní měsíční strop.",
+    links: [
+      { when: "Anthropic · účet a limit", url: "https://console.anthropic.com" },
+      { when: "Google · klíč pro obrázky", url: "https://aistudio.google.com" } ] },
+  { id: "databaze", name: "Databáze", tech: "Postgres", place: "backstage",
+    short: "Paměť systému.",
+    laik: "Archiv se dvěma zamčenými šuplíky: jeden pro chaty a účty (patří Chatu), druhý pro útraty a rozpočty (patří Bráně). Každý má klíč jen ke svému šuplíku. Zálohu dělá scripts/backup.sh.",
+    links: [ { when: "adresa", url: null, note: "žádná, je jen uvnitř serveru" } ] },
+  { id: "terminal", name: "Terminál", tech: "open-terminal", place: "backstage",
+    short: "Příkazová řádka pro správce.",
+    laik: "Nástroj pro správce: příkazová řádka serveru přímo v Chatu. Běžní zaměstnanci ho ve výchozím stavu nevidí.",
+    links: [ { when: "adresa", url: null, note: "žádná vlastní, otevírá se v Chatu" } ] },
+];
+
+const path = document.getElementById("path");
+const backstage = document.getElementById("backstage");
+const card = document.getElementById("card");
+
+function nodeButton(part) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "node" + (part.kind ? " " + part.kind : "");
+  button.dataset.id = part.id;
+  button.setAttribute("aria-pressed", "false");
+  button.innerHTML = `<span class="name">${part.name}</span><span class="tech">${part.tech}</span>`
+    + `<span class="short">${part.short}</span><span class="bubble" aria-hidden="true">${part.laik}${bubbleLink(part)}</span>`;
+  button.addEventListener("click", () => select(part.id));
+  return button;
+}
+
+function bubbleLink(part) {
+  const first = part.links.find((link) => link.url);
+  return first ? `<br><u>${first.url}</u>` : "";
+}
+
+function renderPath() {
+  PARTS.filter((part) => part.place === "path").forEach((part, index) => {
+    const item = document.createElement("li");
+    if (index > 0) item.insertAdjacentHTML("beforeend", '<span class="arrow" aria-hidden="true">→</span>');
+    item.appendChild(nodeButton(part));
+    path.appendChild(item);
+  });
+  PARTS.filter((part) => part.place === "backstage").forEach((part) => backstage.appendChild(nodeButton(part)));
+}
+
+function linkRow(link) {
+  const badge = `<span class="badge${link.when.startsWith("po nasazení") ? " later" : ""}">${link.when}</span>`;
+  const target = link.url
+    ? `<a href="${link.url}" target="_blank" rel="noopener">${link.url}</a>`
+    : `<span class="nolink">—</span>`;
+  const note = link.note ? `<span class="hint">${link.note}</span>` : "";
+  return `<li>${badge}${target}${note}</li>`;
+}
+
+function select(id) {
+  const part = PARTS.find((candidate) => candidate.id === id);
+  document.querySelectorAll(".node").forEach((node) => node.setAttribute("aria-pressed", String(node.dataset.id === id)));
+  card.innerHTML = `<h2>${part.name} <span class="tech">${part.tech}</span></h2><p>${part.laik}</p>`
+    + (part.links.length ? `<ul class="links">${part.links.map(linkRow).join("")}</ul>` : "");
+}
+
+renderPath();
+select("brana");
+</script>
