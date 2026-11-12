@@ -43,8 +43,56 @@ assert_rclone_gets_the_settings() (
   pass "rclone gets the shared drive, the robot's key and the encryption password from .env"
 )
 
+# On Drive, folders are kept by their name: the newest 30 finished backups stay, a crashed upload
+# (.partial) and the check's own smoke folders are never counted as backups.
+assert_old_backups_are_chosen_by_name() {
+  local folders day removed
+  folders=$(for day in $(seq -w 1 31); do echo "202610${day}T023000Z"; done; echo "20261101T023000Z.partial"; echo "$TAG")
+  removed=$(backups_to_remove <<<"$folders" | tr '\n' ' ')
+  [ "$removed" = "20261001T023000Z " ] || fail "with 31 backups on Drive, the wrong ones would be deleted: '$removed'"
+  pass "Google Drive keeps the newest $OFFSITE_KEPT backups and deletes only older finished ones"
+}
+
+assert_download_refuses_bad_names() {
+  local message work
+  message=$("$REPO_ROOT/scripts/offsite.sh" download ../etc 2>&1) && fail "download accepts the name ../etc"
+  grep -q "not a backup name" <<<"$message" || fail "download does not say the name is wrong (got: $message)"
+  work=$(mktemp -d)
+  on_exit_cleanup rm -rf "$work"
+  mkdir "$work/20261112T023000Z"
+  message=$(BACKUP_ROOT="$work" "$REPO_ROOT/scripts/offsite.sh" download 20261112T023000Z 2>&1) && fail "download overwrites a backup on disk"
+  grep -q "already in" <<<"$message" || fail "download does not say the backup is already on disk (got: $message)"
+  pass "download takes only a backup name and never overwrites a backup on disk"
+}
+
 drive_is_set_up() {
   [ -n "${OFFSITE_DRIVE_ID:-}" ] && [ -n "${OFFSITE_ENCRYPTION_PASSWORD:-}" ] && [ -r "${OFFSITE_SERVICE_ACCOUNT_FILE:-/nonexistent}" ]
+}
+
+# Exit action, registered before the rclone settings, so it runs while their file still exists.
+delete_offsite_folder() {
+  offsite_rclone purge "offsite:$1" >/dev/null 2>&1 || true
+  offsite_rclone purge "offsite:$1.partial" >/dev/null 2>&1 || true
+}
+
+# A real backup goes up under the check's own folder name, comes back under another and must match byte
+# for byte. Restoring it into the databases is check-backup-restore.sh's job, not a server in use.
+assert_backup_survives_the_round_trip() {
+  local name file
+  BACKUP_ROOT=$(mktemp -d)
+  on_exit_cleanup rm -rf "$BACKUP_ROOT"
+  export BACKUP_ROOT
+  name=$("$REPO_ROOT/scripts/backup.sh" | tail -1) || fail "could not make a backup to upload"
+  name=${name##*/}
+  on_exit_cleanup delete_offsite_folder "$TAG"
+  open_rclone_settings
+  upload_backup "$name" "$TAG"
+  offsite_folders | grep -qx "$TAG" || fail "the uploaded backup $TAG is not on Google Drive"
+  download_backup "$TAG" "$TAG-back"
+  for file in "$BACKUP_ROOT/$name"/*; do
+    cmp -s "$file" "$BACKUP_ROOT/$TAG-back/${file##*/}" || fail "${file##*/} came back from Google Drive different"
+  done
+  pass "a backup goes to Google Drive encrypted and comes back byte for byte"
 }
 
 main_check() {
@@ -52,11 +100,14 @@ main_check() {
   load_env
   assert_missing_setting_is_named
   assert_rclone_gets_the_settings
+  assert_old_backups_are_chosen_by_name
+  assert_download_refuses_bad_names
   if ! drive_is_set_up; then
     info "NOT RUN: the round trip through Google Drive (.env has no Drive settings yet)"
     return 0
   fi
-  fail "the round trip through Google Drive is not written yet"
+  require_offsite_settings
+  assert_backup_survives_the_round_trip
 }
 
 main_check "$@"

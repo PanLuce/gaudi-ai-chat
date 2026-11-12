@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Copies backups to the school's Google Drive, encrypted, so they survive the loss of the server.
-# Usage: scripts/offsite.sh upload   → copies the newest backups/<UTC time>/, keeps the newest 30 on Drive
-#        scripts/offsite.sh list     → the backups on Drive and how old the newest one is
+# Usage: scripts/offsite.sh upload             → copies the newest backups/<UTC time>/, keeps the newest 30 on Drive
+#        scripts/offsite.sh list               → the backups on Drive and how old the newest one is
+#        scripts/offsite.sh download <UTC time> → backups/<UTC time>/, then scripts/restore.sh restores it
 # .env: OFFSITE_DRIVE_ID (the shared drive), OFFSITE_SERVICE_ACCOUNT_FILE (the robot's key, outside git),
 # OFFSITE_ENCRYPTION_PASSWORD (bootstrap.sh makes it; without it nothing on Drive can be read — keep it
 # in the password manager with the rest of .env). docs/adr/0003-zalohy-mimo-server.md says why.
@@ -12,7 +13,6 @@ readonly RCLONE_IMAGE="rclone/rclone:1.75.2"
 readonly OFFSITE_KEPT=30
 readonly KEY_IN_CONTAINER="/secrets/drive.json"
 readonly BACKUP_NAME_PATTERN='^[0-9]{8}T[0-9]{6}Z$'
-BACKUP_ROOT="${BACKUP_ROOT:-$REPO_ROOT/backups}"
 RCLONE_ENV_FILE=""
 
 require_offsite_settings() {
@@ -44,17 +44,32 @@ EOF
 }
 
 # Runs as the calling user, so downloaded backups belong to gaudi like the ones backup.sh makes.
+# BACKUP_ROOT exists first: Docker would create a missing one owned by root.
 offsite_rclone() {
+  mkdir -p "$BACKUP_ROOT"
   docker run --rm --user "$(id -u):$(id -g)" --env-file "$RCLONE_ENV_FILE" \
     -v "$OFFSITE_SERVICE_ACCOUNT_FILE:$KEY_IN_CONTAINER:ro" -v "$BACKUP_ROOT:/backups" \
     "$RCLONE_IMAGE" --config "" "$@"
 }
 
-# The finished backups on Drive, oldest first. Unfinished uploads end in .partial and are left out.
-offsite_backups() {
+# Folder names in, finished backups out, oldest first. Unfinished uploads (.partial) are left out.
+finished_backups() {
+  { grep -E "$BACKUP_NAME_PATTERN" || true; } | sort
+}
+
+# Folder names in, the finished backups beyond the newest OFFSITE_KEPT out.
+backups_to_remove() {
+  finished_backups | sort -r | tail -n +$((OFFSITE_KEPT + 1))
+}
+
+offsite_folders() {
   local folders
   folders=$(offsite_rclone lsf --dirs-only offsite:) || fail "could not read the backups on Google Drive"
-  sed 's|/$||' <<<"$folders" | { grep -E "$BACKUP_NAME_PATTERN" || true; } | sort
+  sed 's|/$||' <<<"$folders"
+}
+
+offsite_backups() {
+  offsite_folders | finished_backups
 }
 
 newest_local_backup() {
@@ -75,7 +90,7 @@ upload_backup() {
 
 # Deleted folders go to the shared drive's trash, where Google keeps them for 30 more days.
 remove_old_offsite_backups() {
-  offsite_backups | sort -r | tail -n +$((OFFSITE_KEPT + 1)) | while read -r old; do
+  offsite_folders | backups_to_remove | while read -r old; do
     offsite_rclone purge "offsite:$old" || fail "could not delete the old backup $old on Google Drive"
     info "removed old backup $old from Google Drive"
   done
@@ -111,17 +126,40 @@ list() {
   pass "newest on Google Drive: $newest, $(hours_since "$newest") h ago"
 }
 
+# Downloads under <name>.partial and renames it after the last byte, so restore.sh never gets half a backup.
+download_backup() {
+  local remote_name=$1 local_name=$2
+  rm -rf "${BACKUP_ROOT:?}/$local_name.partial"
+  offsite_rclone copy "offsite:$remote_name" "/backups/$local_name.partial" || fail "could not download $remote_name from Google Drive"
+  chmod -R go-rwx "$BACKUP_ROOT/$local_name.partial" # backups hold everyone's chats
+  mv "$BACKUP_ROOT/$local_name.partial" "$BACKUP_ROOT/$local_name"
+}
+
+# Checked before anything reaches Drive, so a wrong name costs nothing.
+require_new_backup_name() {
+  grep -Eq "$BACKUP_NAME_PATTERN" <<<"$1" || fail "$1 is not a backup name (see scripts/offsite.sh list)"
+  [ ! -e "$BACKUP_ROOT/$1" ] || fail "$1 is already in $BACKUP_ROOT, restore it with scripts/restore.sh $BACKUP_ROOT/$1"
+}
+
+download() {
+  offsite_backups | grep -qx "$1" || fail "backup $1 is not on Google Drive (see scripts/offsite.sh list)"
+  download_backup "$1" "$1"
+  pass "backup $1 downloaded, restore it with scripts/restore.sh $BACKUP_ROOT/$1"
+  echo "$BACKUP_ROOT/$1"
+}
+
 main() {
   local command=${1:-}
   case "$command" in
     upload | list) ;;
-    *) fail "usage: scripts/offsite.sh upload | list" ;;
+    download) require_new_backup_name "${2:-}" ;;
+    *) fail "usage: scripts/offsite.sh upload | list | download <UTC time>" ;;
   esac
   require_tools docker
   load_env
   require_offsite_settings
   open_rclone_settings
-  "$command"
+  "$command" "${@:2}"
 }
 
 [ "${BASH_SOURCE[0]}" != "$0" ] || main "$@"
