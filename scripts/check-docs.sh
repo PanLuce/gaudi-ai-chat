@@ -193,6 +193,9 @@ overview.TRIP.forEach((step, index) => {
   lastPathIndex = Math.max(lastPathIndex, furthest);
 });
 if (lastPathIndex !== pathOrder.length - 1) report("the trip does not reach the last part on the path");
+// A concrete example quotes both ends: Franta's question in the first step, the answer in the last.
+[0, overview.TRIP.length - 1].filter((index) => !/„[^“]+“/.test(overview.TRIP[index].text))
+  .forEach((index) => report(`trip step ${index + 1}: quotes no concrete question or answer („…“)`));
 // Every part shows a picture of where it happens, on the map and in the trip bar.
 overview.PARTS.filter((part) => !/<svg[\s\S]*<\/svg>/.test(overview.ICONS[part.id] || ""))
   .forEach((part) => report(`part "${part.id}" has no icon in ICONS`));
