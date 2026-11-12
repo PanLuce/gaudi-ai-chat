@@ -64,13 +64,10 @@ services:
       postgres:
         condition: service_healthy
     logging: *default-logging
-    restart: "no"
 
   open-webui:
     image: ghcr.io/open-webui/open-webui:0.13.3
-    # No published port: people reach it only through caddy.
-    expose:
-      - "8080"
+    # No published port: people reach it only through caddy (http://open-webui:8080).
     environment:
       DATABASE_URL: postgresql://openwebui:${OPENWEBUI_DB_PASSWORD:?run scripts/bootstrap.sh}@postgres:5432/openwebui
       # Fixed key: sessions survive container recreation (upgrades).
@@ -123,13 +120,12 @@ services:
 
   litellm:
     image: ghcr.io/berriai/litellm:v1.108.4
-    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    command: ["--config", "/app/config.yaml"]
     ports:
       - "127.0.0.1:4000:4000"
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set LITELLM_MASTER_KEY in .env}
       DATABASE_URL: postgresql://litellm:${LITELLM_DB_PASSWORD:?run scripts/bootstrap.sh}@postgres:5432/litellm
-      STORE_MODEL_IN_DB: "False"
       UI_USERNAME: admin
       UI_PASSWORD: ${LITELLM_UI_PASSWORD:?run scripts/bootstrap.sh}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
@@ -153,8 +149,6 @@ services:
   open-terminal:
     image: ghcr.io/open-webui/open-terminal:0.17.6
     # No published port: reachable only from the compose network as http://open-terminal:8000
-    expose:
-      - "8000"
     environment:
       OPEN_TERMINAL_API_KEY: ${OPEN_TERMINAL_API_KEY:?set OPEN_TERMINAL_API_KEY in .env}
     healthcheck:

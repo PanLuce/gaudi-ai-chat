@@ -10,13 +10,14 @@ from datetime import datetime
 
 from fastapi import HTTPException
 import litellm
+from litellm._logging import verbose_proxy_logger
 from litellm.integrations.custom_logger import CustomLogger
 
 PERSONAL_BUDGET = "rozpocet"
 SCHOOL_BUDGET = "rozpocet-skoly"
 
-# Budgets above a single person: the key Open WebUI uses (the school's budget), or a team.
-SHARED_BUDGET_ENTITIES = {"key", "team"}
+# The school's budget sits on the key Open WebUI uses (scripts/bootstrap.sh).
+SCHOOL_BUDGET_ENTITY = "key"
 
 # Code -> text. The personal budget message is built in personal_budget_message(), it has a date.
 MESSAGES = {
@@ -61,7 +62,7 @@ def czech_message(exc: Exception, reset_at: datetime | None = None) -> tuple[str
     """Returns (code, Czech text) for any error a person can see."""
     if is_personal_budget(exc):
         return PERSONAL_BUDGET, personal_budget_message(exc.max_budget, reset_at)
-    if isinstance(exc, litellm.BudgetExceededError) and getattr(exc, "entity_type", None) in SHARED_BUDGET_ENTITIES:
+    if isinstance(exc, litellm.BudgetExceededError) and getattr(exc, "entity_type", None) == SCHOOL_BUDGET_ENTITY:
         return SCHOOL_BUDGET, MESSAGES[SCHOOL_BUDGET]
     code = error_code(exc)
     return code, MESSAGES[code]
@@ -126,7 +127,7 @@ class CzechErrors(CustomLogger):
             try:
                 reset_at = await personal_budget_reset_at(getattr(original_exception, "entity_id", None))
             except Exception:  # noqa: BLE001  # the message must go out even if the lookup breaks
-                reset_at = None
+                verbose_proxy_logger.exception("czech_errors: could not look up when the budget resets")
         code, text = czech_message(original_exception, reset_at)
         status = status_of(original_exception) or 500
         return HTTPException(status_code=status, detail=with_code(code, text))
