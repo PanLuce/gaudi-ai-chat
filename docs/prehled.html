@@ -90,10 +90,6 @@ header { display: grid; gap: 12px; }
 .badge.later { background: var(--provider); color: var(--fg); }
 .hint { color: var(--muted); font-size: 14px; }
 
-/* The trip of one question */
-.trip { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: trip; }
-.trip li { counter-increment: trip; display: grid; grid-template-columns: 2rem 1fr; gap: 10px; align-items: baseline; }
-.trip li::before { content: counter(trip); font: 600 15px var(--font-mono); color: var(--accent); }
 footer { color: var(--muted); font-size: 14px; display: grid; gap: 6px; }
 
 /* Phone: the path runs top to bottom */
@@ -118,17 +114,6 @@ footer { color: var(--muted); font-size: 14px; display: grid; gap: 6px; }
   </section>
 
   <section class="card" id="card" aria-live="polite"></section>
-
-  <section class="card">
-    <h2>Cesta jednoho dotazu</h2>
-    <ol class="trip">
-      <li>Zaměstnanec napíše otázku v prohlížeči.</li>
-      <li><b>Vchod</b> ji přijme zamčeným spojením a pustí dál jen do Chatu.</li>
-      <li><b>Chat</b> otázku uloží do Databáze a pošle ji Bráně spolu s e-mailem toho, kdo se ptá.</li>
-      <li><b>Brána</b> zkontroluje, že člověk ještě nevyčerpal svých 5 $ na měsíc, a pošle otázku Poskytovateli.</li>
-      <li><b>Poskytovatel</b> odpoví. Brána připíše cenu odpovědi tomu člověku a Chat ukáže odpověď.</li>
-    </ol>
-  </section>
 
   <footer>
     <span>Adresy označené „dnes“ fungují jen na počítači, kde systém právě běží. Adresy „po nasazení“ začnou fungovat, až bude systém na serveru.</span>
