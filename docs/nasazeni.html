@@ -281,10 +281,10 @@ ssh -N -L 4000:127.0.0.1:4000 gaudi-ai`,
       { label: "ssh: volba -L (tunel)", url: "https://man.openbsd.org/ssh" } ] },
 
   { phase: "Zálohy", title: "Zapni noční zálohu", short: "Noční záloha",
-    why: "Záloha je fotka všech dat. Každou noc se udělá nová a drží se posledních 14. Chat se na ni na pár sekund zastaví, proto ve 2:30.",
+    why: "Záloha je fotka všech dat. Každou noc se udělá nová a drží se posledních 14. Chat se na ni na pár sekund zastaví, proto ve 2:30. Hned po ní se kopie zašifrovaná nahraje na Google Drive (nastavíš v dalším kroku; do té doby kopie v logu hlásí ✗).",
     where: "Na serveru jako gaudi. Druhý příkaz přidá noční zálohu do crontabu; když tam už je, nepřidá ji podruhé.",
     command: `cd ~/openwebui-local && mkdir -p backups && scripts/backup.sh
-line='30 2 * * * cd /home/gaudi/openwebui-local && scripts/backup.sh >> backups/backup.log 2>&1'; crontab -l 2>/dev/null | grep -qxF "$line" || (crontab -l 2>/dev/null; echo "$line") | crontab -
+line='30 2 * * * cd /home/gaudi/openwebui-local && { scripts/backup.sh && scripts/offsite.sh upload; } >> backups/backup.log 2>&1'; crontab -l 2>/dev/null | grep -qxF "$line" || (crontab -l 2>/dev/null; echo "$line") | crontab -
 crontab -l`,
     see: "První příkaz končí „✓ backup complete“ a cestou ke složce. crontab -l ukáže nový řádek.",
     guides: [
@@ -298,11 +298,24 @@ crontab -l`,
     guides: [
       { label: "ssh: dokumentace", url: "https://man.openbsd.org/ssh" } ] },
 
-  { phase: "Zálohy", title: "Zálohy mimo server (Google Drive)", short: "Mimo server", todo: true,
-    why: "Kdyby server zmizel, zmizí i zálohy na něm. Kopie musí být i jinde.",
-    where: "Doplní se v samostatném kroku vývoje.",
-    see: "Před ostrým provozem musí být hotové.",
-    guides: [] },
+  { phase: "Zálohy", title: "Zálohy mimo server (Google Drive)", short: "Mimo server", manual: true,
+    why: "Kdyby server zmizel, zmizí i zálohy na něm. Každá noční záloha se proto zašifrovaná nahraje na sdílený disk školy a drží se posledních 30. Zapisuje tam robot (servisní účet), ne člověk, takže kopie přežijí i odchod kohokoli ze školy.",
+    where: "Nejdřív požádej správce Google Workspace školy: (1) sdílený disk „AI chat – zálohy“; (2) v Google Cloud projekt se zapnutým Google Drive API a v něm servisní účet s klíčem JSON, pojmenovaným drive-backup.json; (3) e-mail servisního účtu přidat na sdílený disk jako Správce obsahu; (4) ID sdíleného disku (konec adresy disku v prohlížeči). Klíč si ulož do složky Stažené soubory; podrobný postup pro správce doplníme při nasazení. Pak v terminálu na svém počítači, sám (ne přes Claude): první dva příkazy přenesou klíč na server, ssh gaudi-ai otevře relaci na serveru a zbylé řádky patří do ní. Na dotaz vlož ID sdíleného disku.",
+    command: `ssh gaudi-ai 'mkdir -p -m 700 openwebui-local/secrets'
+scp ~/Downloads/drive-backup.json gaudi-ai:openwebui-local/secrets/drive-backup.json
+ssh gaudi-ai
+cd ~/openwebui-local && chmod 600 secrets/drive-backup.json
+sed -i '/^OFFSITE_SERVICE_ACCOUNT_FILE=/d' .env && printf 'OFFSITE_SERVICE_ACCOUNT_FILE=%s\\n' "$HOME/openwebui-local/secrets/drive-backup.json" >> .env
+read -r -p "ID sdíleného disku: " DRIVE_ID
+sed -i '/^OFFSITE_DRIVE_ID=/d' .env && printf 'OFFSITE_DRIVE_ID=%s\\n' "$DRIVE_ID" >> .env
+scripts/offsite.sh upload && scripts/offsite.sh list`,
+    see: "„✓ backup … is on Google Drive“ a „✓ newest on Google Drive: …, 0 h ago“. Na sdíleném disku je složka openwebui-backups se zašifrovanými jmény. Heslo k šifře (OFFSITE_ENCRYPTION_PASSWORD) je v .env, tedy i ve správci hesel; bez něj se ze zálohy na Drive nic neobnoví.",
+    guides: [
+      { label: "Google Workspace: sdílený disk", url: "https://support.google.com/a/users/answer/7212025" },
+      { label: "Google Cloud: servisní účet", url: "https://cloud.google.com/iam/docs/service-accounts-create" },
+      { label: "Google Cloud: klíč servisního účtu", url: "https://cloud.google.com/iam/docs/keys-create-delete" },
+      { label: "rclone: Google Drive se servisním účtem", url: "https://rclone.org/drive/#service-account-support" },
+      { label: "rclone: šifrování (crypt)", url: "https://rclone.org/crypt/" } ] },
 
   { phase: "Zálohy", title: "Hlídání dostupnosti", short: "Dostupnost", todo: true,
     why: "Hlídač pošle e-mail, když chat přestane odpovídat, dřív než si toho všimnou lidé.",
@@ -321,8 +334,9 @@ crontab -l`,
     why: "Jako servis auta: nejdřív záloha, pak výměna dílů, pak zkušební jízda.",
     where: "Na serveru jako gaudi. Jednou za měsíc i systém serveru: ssh gaudi-ai-root 'apt-get update && apt-get upgrade -y'.",
     command: `cd ~/openwebui-local
-scripts/backup.sh && git pull && scripts/bootstrap.sh && scripts/smoke.sh`,
-    see: "Záloha, nová verze, samé ✓.",
+scripts/backup.sh && git pull && scripts/bootstrap.sh && scripts/smoke.sh
+scripts/offsite.sh list`,
+    see: "Záloha, nová verze, samé ✓. Poslední řádek ukáže nejnovější zálohu na Google Drive: víc než 24 h znamená, že se noční kopie nenahrává (příčina je v backups/backup.log).",
     guides: [
       { label: "Hetzner: zálohy a snímky serveru", url: "https://docs.hetzner.com/cloud/servers/backups-snapshots/overview" } ] },
 ];

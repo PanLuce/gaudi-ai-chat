@@ -204,6 +204,23 @@ JS
   pass "docs/prehled.html: the query trip follows Franta's question across the picture, one line and one icon per step"
 }
 
+check_guide_offsite_copy() {
+  run_guide_check "docs/nasazeni.html: the nightly backup does not reach Google Drive" <<'JS'
+// A backup that stays on the server dies with it: the nightly run must also copy it off the server.
+const nightly = guide.STEPS.find((step) => step.title === "Zapni noční zálohu");
+const offsite = guide.STEPS.find((step) => step.title === "Zálohy mimo server (Google Drive)");
+let failed = false;
+if (!nightly || !/scripts\/backup\.sh && scripts\/offsite\.sh upload/.test(nightly.command || "")) {
+  failed = true; console.error("✗ the nightly crontab line does not run scripts/offsite.sh upload after the backup");
+}
+if (!offsite || offsite.todo || !/scripts\/offsite\.sh upload/.test(offsite.command || "")) {
+  failed = true; console.error("✗ the step Zálohy mimo server is not ready or does not try an upload");
+}
+process.exit(failed ? 1 : 0);
+JS
+  pass "docs/nasazeni.html: the nightly backup is copied to Google Drive"
+}
+
 main() {
   require_tools curl gh grep node
   local page
@@ -219,6 +236,7 @@ main() {
   check_guide_phases
   check_guide_phase_steps
   check_overview_trip
+  check_guide_offsite_copy
 }
 
 main "$@"

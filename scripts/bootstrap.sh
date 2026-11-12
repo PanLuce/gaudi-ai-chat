@@ -47,6 +47,7 @@ ensure_secrets() {
   ensure_secret OPENWEBUI_DB_PASSWORD
   ensure_secret WEBUI_SECRET_KEY
   ensure_secret WEBUI_ADMIN_PASSWORD
+  ensure_secret OFFSITE_ENCRYPTION_PASSWORD # without it no copy on Google Drive can be read
 }
 
 # The admin account is created from .env on Chat's first start, so the e-mail must be there before it.
