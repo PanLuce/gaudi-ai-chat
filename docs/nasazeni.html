@@ -155,17 +155,11 @@ cat ~/.ssh/id_ed25519.pub`,
 
   { phase: "Server", title: "Pojmenuj server ve svém počítači",
     why: "Místo pamatování IP adresy dáš serveru přezdívku. Pak stačí psát ssh gaudi-ai.",
-    where: "V terminálu na svém počítači. Místo 203.0.113.10 napiš IP adresu serveru.",
-    command: `cat >> ~/.ssh/config <<'EOF'
-Host gaudi-ai
-  HostName 203.0.113.10
-  User gaudi
-Host gaudi-ai-root
-  HostName 203.0.113.10
-  User root
-EOF
-ssh gaudi-ai-root 'hostname'`,
-    see: "Po potvrzení otisku serveru (yes) vypíše gaudi-ai.",
+    where: "V terminálu na svém počítači. Příkaz se zeptá na IP adresu serveru; najdeš ji v Hetzner Cloud Console → Servers → gaudi-ai (Public IP).",
+    command: `read -r -p "IP adresa serveru: " SERVER_IP
+grep -q '^Host gaudi-ai$' ~/.ssh/config 2>/dev/null || printf 'Host gaudi-ai\\n  HostName %s\\n  User gaudi\\nHost gaudi-ai-root\\n  HostName %s\\n  User root\\n' "$SERVER_IP" "$SERVER_IP" >> ~/.ssh/config
+ssh -o StrictHostKeyChecking=accept-new gaudi-ai-root 'hostname'`,
+    see: "Vypíše gaudi-ai. Spuštěný podruhé alias nezdvojí.",
     guides: [
       { label: "Hetzner: Connecting to the Server", url: "https://docs.hetzner.com/cloud/servers/getting-started/connecting-to-the-server" } ] },
 

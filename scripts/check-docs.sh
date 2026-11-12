@@ -68,6 +68,12 @@ if (!data) { console.error("✗ no <script id=\"guide-data\"> with the steps"); 
 const context = {};
 vm.runInNewContext(data[1] + "\nthis.STEPS = STEPS; this.promptFor = promptFor;", context);
 let failed = false;
+// A command is copied as it is, so it must not hold anything the reader has to replace inside it.
+context.STEPS.forEach((step, index) => {
+  if (step.command && /203\.0\.113\.|<[^>]*>/.test(step.command)) {
+    failed = true; console.error(`✗ step ${index + 1} (${step.title}): the command holds a placeholder to replace`);
+  }
+});
 context.STEPS.forEach((step, index) => {
   if (step.todo) return;
   const prompt = context.promptFor(step, index);
