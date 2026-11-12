@@ -79,6 +79,27 @@ header { display: grid; gap: 12px; }
 @media (prefers-reduced-motion: reduce) { .bubble { transition: none; } }
 
 /* The detail card */
+/* Playing the trip of one question over the picture */
+[hidden] { display: none !important; } /* the artifact skeleton has it too; also when opened from disk */
+.trip-start { justify-self: start; font: 600 15px var(--font-body); border: 1.5px solid var(--accent); background: var(--accent-soft); color: var(--accent); border-radius: 10px; padding: 8px 14px; cursor: pointer; }
+.trip-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; background: var(--surface); border: 1.5px solid var(--accent); border-radius: 12px; padding: 10px 14px; }
+.node .head { display: flex; align-items: center; gap: 8px; }
+.ic { width: 22px; height: 22px; flex: none; color: var(--accent); }
+.map.playing .node:not(.lit) .ic { color: var(--muted); }
+.trip-icons { display: flex; gap: 4px; }
+.trip-icons .ic { width: 30px; height: 30px; }
+.trip-bar .step-no { font: 600 14px var(--font-mono); color: var(--accent); font-variant-numeric: tabular-nums; }
+.trip-bar .text { flex: 1 1 24ch; min-width: 0; font-size: 17px; }
+.trip-buttons { display: flex; gap: 8px; }
+.trip-bar button { font: 600 14px var(--font-body); border: 1.5px solid var(--accent); background: var(--surface); color: var(--accent); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+.trip-bar button.primary { background: var(--accent); color: var(--surface); }
+.trip-bar button:disabled { opacity: 0.4; cursor: default; }
+.trip-start:focus-visible, .trip-bar button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+/* Dimmed with colours, not opacity: opacity would make the hover bubble see-through and trap it under the backstage row. */
+.map.playing .node:not(.lit) { background: var(--bg); border-color: var(--line); }
+.map.playing .node:not(.lit) .name, .map.playing .node:not(.lit) .short { color: var(--muted); }
+.map.playing .node.lit { border-color: var(--accent); border-style: solid; box-shadow: 0 0 0 3px var(--accent-soft); }
+
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: grid; gap: 12px; min-width: 0; }
 .card h2 { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
 .card h2 .tech { font: 14px var(--font-mono); color: var(--muted); font-weight: 400; }
@@ -108,10 +129,23 @@ footer { color: var(--muted); font-size: 14px; display: grid; gap: 6px; }
     <p class="lead">Šest částí, každá má jeden úkol. Najeď myší na část (na telefonu ťukni) a uvidíš, co dělá a kde ji najdeš.</p>
   </header>
 
-  <section class="map" aria-label="Schéma systému">
+  <button type="button" class="trip-start" id="trip-start">▶ Přehrát příklad: Franta se ptá na rozpočet ministerstva</button>
+
+  <section class="map" id="map" aria-label="Schéma systému">
     <ol class="path" id="path"></ol>
     <div class="backstage" id="backstage"><span class="backstage-label">Za scénou</span></div>
   </section>
+
+  <div class="trip-bar" id="trip-bar" aria-live="polite" hidden>
+    <span class="step-no" id="trip-no"></span>
+    <span class="trip-icons" id="trip-icons"></span>
+    <span class="text" id="trip-text"></span>
+    <span class="trip-buttons">
+      <button type="button" id="trip-back" aria-label="Předchozí krok">←</button>
+      <button type="button" class="primary" id="trip-next">Další →</button>
+      <button type="button" id="trip-close">Zavřít</button>
+    </span>
+  </div>
 
   <section class="card" id="card" aria-live="polite"></section>
 
@@ -121,7 +155,7 @@ footer { color: var(--muted); font-size: 14px; display: grid; gap: 6px; }
   </footer>
 </div>
 
-<script>
+<script id="overview-data">
 // One record per part; the picture, the bubbles and the card all come from here.
 const PARTS = [
   { id: "zamestnanec", name: "Zaměstnanec", tech: "prohlížeč", kind: "person", place: "path",
@@ -163,6 +197,28 @@ const PARTS = [
     links: [ { when: "adresa", url: null, note: "žádná vlastní, otevírá se v Chatu" } ] },
 ];
 
+// The trip of one real question (Franta asks about the ministry budget): each step lights up its parts and shows one line.
+const TRIP = [
+  { parts: ["zamestnanec"], text: "Franta napíše do Chatu: „Kolik je letos rozpočet ministerstva školství?“" },
+  { parts: ["vchod"], text: "Vchod převezme Frantovu otázku zamčeným (šifrovaným) spojením." },
+  { parts: ["chat", "databaze"], text: "Chat ji uloží do Frantovy historie a pošle Bráně i s jeho e-mailem." },
+  { parts: ["brana"], text: "Brána ověří, že Franta má z 5 $ ještě co utratit, a pošle otázku dál." },
+  { parts: ["poskytovatele", "brana"], text: "Claude odpoví: „Letos asi 284 miliard Kč.“ Brána Frantovi připíše cenu." },
+];
+
+// Where each part happens, as a picture: Lucide icons v0.460.0 (ISC licence, lucide.dev), inlined.
+const ICONS = {
+  zamestnanec: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>',
+  vchod: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 4h3a2 2 0 0 1 2 2v14" /><path d="M2 20h3" /><path d="M13 20h9" /><path d="M10 12v.01" /><path d="M13 4.562v16.157a1 1 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1 1.515-1.94l4-1A2 2 0 0 1 13 4.561Z" /></svg>',
+  chat: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>',
+  brana: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /><path d="m9 12 2 2 4-4" /></svg>',
+  poskytovatele: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" /><path d="M20 3v4" /><path d="M22 5h-4" /><path d="M4 17v2" /><path d="M5 18H3" /></svg>',
+  databaze: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M3 5V19A9 3 0 0 0 21 19V5" /><path d="M3 12A9 3 0 0 0 21 12" /></svg>',
+  terminal: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 11 2-2-2-2" /><path d="M11 13h4" /><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /></svg>',
+};
+</script>
+
+<script>
 const path = document.getElementById("path");
 const backstage = document.getElementById("backstage");
 const card = document.getElementById("card");
@@ -173,7 +229,7 @@ function nodeButton(part) {
   button.className = "node" + (part.kind ? " " + part.kind : "");
   button.dataset.id = part.id;
   button.setAttribute("aria-pressed", "false");
-  button.innerHTML = `<span class="name">${part.name}</span><span class="tech">${part.tech}</span>`
+  button.innerHTML = `<span class="head">${ICONS[part.id]}<span class="name">${part.name}</span></span><span class="tech">${part.tech}</span>`
     + `<span class="short">${part.short}</span><span class="bubble" aria-hidden="true">${part.laik}${bubbleLink(part)}</span>`;
   button.addEventListener("click", () => select(part.id));
   return button;
@@ -209,6 +265,45 @@ function select(id) {
   card.innerHTML = `<h2>${part.name} <span class="tech">${part.tech}</span></h2><p>${part.laik}</p>`
     + (part.links.length ? `<ul class="links">${part.links.map(linkRow).join("")}</ul>` : "");
 }
+
+const map = document.getElementById("map");
+const tripStart = document.getElementById("trip-start");
+const tripBar = document.getElementById("trip-bar");
+const tripNext = document.getElementById("trip-next");
+let tripStep = 0;
+
+function showStep(index) {
+  tripStep = index;
+  const step = TRIP[index];
+  map.classList.add("playing");
+  document.querySelectorAll(".node").forEach((node) => node.classList.toggle("lit", step.parts.includes(node.dataset.id)));
+  document.getElementById("trip-no").textContent = `${index + 1} / ${TRIP.length}`;
+  document.getElementById("trip-text").textContent = step.text;
+  document.getElementById("trip-icons").innerHTML = step.parts.map((id) => ICONS[id]).join("");
+  document.getElementById("trip-back").disabled = index === 0;
+  tripNext.textContent = index === TRIP.length - 1 ? "Znovu" : "Další →";
+  select(step.parts[0]);
+}
+
+function startTrip() {
+  tripStart.hidden = true;
+  tripBar.hidden = false;
+  showStep(0);
+  tripNext.focus();
+}
+
+function stopTrip() {
+  map.classList.remove("playing");
+  document.querySelectorAll(".node.lit").forEach((node) => node.classList.remove("lit"));
+  tripBar.hidden = true;
+  tripStart.hidden = false;
+  tripStart.focus();
+}
+
+tripStart.addEventListener("click", startTrip);
+document.getElementById("trip-back").addEventListener("click", () => showStep(tripStep - 1));
+tripNext.addEventListener("click", () => showStep((tripStep + 1) % TRIP.length));
+document.getElementById("trip-close").addEventListener("click", stopTrip);
 
 renderPath();
 select("brana");

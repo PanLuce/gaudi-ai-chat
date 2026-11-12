@@ -154,6 +154,56 @@ JS
   pass "docs/nasazeni.html: every phase lists all its steps"
 }
 
+# The overview's data (<script id="overview-data"> of docs/prehled.html), run in a sandbox like the guide's.
+readonly OVERVIEW_LOADER='const fs = require("fs"), vm = require("vm");
+const html = fs.readFileSync(process.argv[2], "utf8");
+const data = html.match(/<script id="overview-data">([\s\S]*?)<\/script>/);
+if (!data) { console.error("✗ no <script id=\"overview-data\"> with the parts"); process.exit(1); }
+const overview = {};
+vm.runInNewContext(data[1] + `
+this.PARTS = typeof PARTS === "undefined" ? null : PARTS;
+this.TRIP = typeof TRIP === "undefined" ? null : TRIP;
+this.ICONS = typeof ICONS === "undefined" ? {} : ICONS;`, overview);
+if (!overview.PARTS || !overview.TRIP) { console.error("✗ overview-data defines no PARTS or no TRIP"); process.exit(1); }'
+
+# Reads the check's JS from stdin and runs it after the overview loader; fails with $1 when it exits non-zero.
+run_overview_check() {
+  { printf '%s\n' "$OVERVIEW_LOADER"; cat; } | node - "$REPO_ROOT/docs/prehled.html" || fail "$1"
+}
+
+check_overview_trip() {
+  run_overview_check "docs/prehled.html: the query trip does not follow the picture" <<'JS'
+let failed = false;
+const report = (message) => { failed = true; console.error(`✗ ${message}`); };
+const ids = new Set(overview.PARTS.map((part) => part.id));
+const pathOrder = overview.PARTS.filter((part) => part.place === "path").map((part) => part.id);
+let lastPathIndex = -1;
+overview.TRIP.forEach((step, index) => {
+  const label = `trip step ${index + 1}`;
+  step.parts.filter((id) => !ids.has(id)).forEach((id) => report(`${label}: no part "${id}"`));
+  // The caption sits under the picture on one line on a desktop.
+  if (step.text.length > 80) report(`${label}: text has ${step.text.length} characters, at most 80`);
+  // One concrete trip: every step follows the same person and their question.
+  if (!/Frant/.test(step.text)) report(`${label}: does not follow Franta's question ("${step.text}")`);
+  // The question travels along the picture; a step lights up the next part on the path (backstage parts may join).
+  const onPath = step.parts.map((id) => pathOrder.indexOf(id)).filter((position) => position >= 0);
+  const furthest = Math.max(...onPath);
+  if (onPath.length === 0) report(`${label}: lights up no part on the path`);
+  else if (furthest !== lastPathIndex + 1) report(`${label}: jumps to "${pathOrder[furthest]}", next on the path is "${pathOrder[lastPathIndex + 1]}"`);
+  lastPathIndex = Math.max(lastPathIndex, furthest);
+});
+if (lastPathIndex !== pathOrder.length - 1) report("the trip does not reach the last part on the path");
+// A concrete example quotes both ends: Franta's question in the first step, the answer in the last.
+[0, overview.TRIP.length - 1].filter((index) => !/„[^“]+“/.test(overview.TRIP[index].text))
+  .forEach((index) => report(`trip step ${index + 1}: quotes no concrete question or answer („…“)`));
+// Every part shows a picture of where it happens, on the map and in the trip bar.
+overview.PARTS.filter((part) => !/<svg[\s\S]*<\/svg>/.test(overview.ICONS[part.id] || ""))
+  .forEach((part) => report(`part "${part.id}" has no icon in ICONS`));
+process.exit(failed ? 1 : 0);
+JS
+  pass "docs/prehled.html: the query trip follows Franta's question across the picture, one line and one icon per step"
+}
+
 main() {
   require_tools curl gh grep node
   local page
@@ -168,6 +218,7 @@ main() {
   check_guide_prompts
   check_guide_phases
   check_guide_phase_steps
+  check_overview_trip
 }
 
 main "$@"
