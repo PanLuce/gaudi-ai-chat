@@ -21,7 +21,8 @@ assert_missing_setting_is_named() {
 assert_rclone_gets_the_settings() (
   local work log
   work=$(mktemp -d)
-  trap 'rm -rf "$work"' EXIT
+  on_exit_cleanup rm -rf "$work"
+  trap run_cleanup EXIT # this subshell's own cleanups, the rclone settings file among them
   printf '{}' > "$work/key.json"
   OFFSITE_DRIVE_ID="$TAG-drive" OFFSITE_SERVICE_ACCOUNT_FILE="$work/key.json" OFFSITE_ENCRYPTION_PASSWORD=$(openssl rand -hex 24)
   BACKUP_ROOT="$work"
@@ -80,14 +81,14 @@ delete_offsite_folder() {
 assert_backup_survives_the_round_trip() {
   local name file
   BACKUP_ROOT=$(mktemp -d)
-  on_exit_cleanup rm -rf "$BACKUP_ROOT"
   export BACKUP_ROOT
+  on_exit_cleanup delete_offsite_folder "$TAG" # before rm: offsite_rclone re-creates BACKUP_ROOT
+  on_exit_cleanup rm -rf "$BACKUP_ROOT"
   name=$("$REPO_ROOT/scripts/backup.sh" | tail -1) || fail "could not make a backup to upload"
   name=${name##*/}
-  on_exit_cleanup delete_offsite_folder "$TAG"
   open_rclone_settings
   upload_backup "$name" "$TAG"
-  offsite_folders | grep -qx "$TAG" || fail "the uploaded backup $TAG is not on Google Drive"
+  grep -qx "$TAG" <<<"$(offsite_folders)" || fail "the uploaded backup $TAG is not on Google Drive"
   download_backup "$TAG" "$TAG-back"
   for file in "$BACKUP_ROOT/$name"/*; do
     cmp -s "$file" "$BACKUP_ROOT/$TAG-back/${file##*/}" || fail "${file##*/} came back from Google Drive different"

@@ -282,9 +282,9 @@ ssh -N -L 4000:127.0.0.1:4000 gaudi-ai`,
 
   { phase: "Zálohy", title: "Zapni noční zálohu", short: "Noční záloha",
     why: "Záloha je fotka všech dat. Každou noc se udělá nová a drží se posledních 14. Chat se na ni na pár sekund zastaví, proto ve 2:30. Hned po ní se kopie zašifrovaná nahraje na Google Drive (nastavíš v dalším kroku; do té doby kopie v logu hlásí ✗).",
-    where: "Na serveru jako gaudi. Druhý příkaz přidá noční zálohu do crontabu; když tam už je, nepřidá ji podruhé.",
+    where: "Na serveru jako gaudi. Druhý příkaz zapíše noční zálohu do crontabu; starší řádek se zálohou nahradí, takže tam je vždy jen jednou.",
     command: `cd ~/openwebui-local && mkdir -p backups && scripts/backup.sh
-line='30 2 * * * cd /home/gaudi/openwebui-local && { scripts/backup.sh && scripts/offsite.sh upload; } >> backups/backup.log 2>&1'; crontab -l 2>/dev/null | grep -qxF "$line" || (crontab -l 2>/dev/null; echo "$line") | crontab -
+line='30 2 * * * cd /home/gaudi/openwebui-local && { scripts/backup.sh && scripts/offsite.sh upload; } >> backups/backup.log 2>&1'; (crontab -l 2>/dev/null | grep -vF 'scripts/backup.sh'; echo "$line") | crontab -
 crontab -l`,
     see: "První příkaz končí „✓ backup complete“ a cestou ke složce. crontab -l ukáže nový řádek.",
     guides: [

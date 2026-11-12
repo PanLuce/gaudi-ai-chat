@@ -74,7 +74,7 @@ offsite_backups() {
 
 newest_local_backup() {
   local newest
-  newest=$(ls -1d "$BACKUP_ROOT"/[0-9]*Z/ 2>/dev/null | sort | tail -1)
+  newest=$(ls -1d "$BACKUP_ROOT"/[0-9]*Z/ 2>/dev/null | sort | tail -1 || true) # none yet: upload says so
   newest=${newest%/}
   echo "${newest##*/}"
 }
@@ -130,8 +130,9 @@ list() {
 download_backup() {
   local remote_name=$1 local_name=$2
   rm -rf "${BACKUP_ROOT:?}/$local_name.partial"
+  mkdir -m 700 "$BACKUP_ROOT/$local_name.partial" # closed before the first byte: backups hold everyone's chats
   offsite_rclone copy "offsite:$remote_name" "/backups/$local_name.partial" || fail "could not download $remote_name from Google Drive"
-  chmod -R go-rwx "$BACKUP_ROOT/$local_name.partial" # backups hold everyone's chats
+  chmod -R go-rwx "$BACKUP_ROOT/$local_name.partial"
   mv "$BACKUP_ROOT/$local_name.partial" "$BACKUP_ROOT/$local_name"
 }
 
@@ -142,7 +143,9 @@ require_new_backup_name() {
 }
 
 download() {
-  offsite_backups | grep -qx "$1" || fail "backup $1 is not on Google Drive (see scripts/offsite.sh list)"
+  local on_drive
+  on_drive=$(offsite_backups)
+  grep -qx "$1" <<<"$on_drive" || fail "backup $1 is not on Google Drive (see scripts/offsite.sh list)"
   download_backup "$1" "$1"
   pass "backup $1 downloaded, restore it with scripts/restore.sh $BACKUP_ROOT/$1"
   echo "$BACKUP_ROOT/$1"
@@ -155,6 +158,7 @@ main() {
     download) require_new_backup_name "${2:-}" ;;
     *) fail "usage: scripts/offsite.sh upload | list | download <UTC time>" ;;
   esac
+  umask 077 # backups/ and the rclone settings file are for the owner only
   require_tools docker
   load_env
   require_offsite_settings
