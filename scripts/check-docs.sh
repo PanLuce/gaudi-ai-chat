@@ -74,6 +74,18 @@ context.STEPS.forEach((step, index) => {
     failed = true; console.error(`✗ step ${index + 1} (${step.title}): the command holds a placeholder to replace`);
   }
 });
+// Secrets never reach a screen or a transcript: no command prints a new one, and every step that
+// handles .env contents is done by the person, with a prompt that tells Claude not to run it.
+context.STEPS.forEach((step, index) => {
+  if (!step.command) return;
+  if (/^\s*(echo [^|>]*openssl rand|openssl rand)/m.test(step.command)) {
+    failed = true; console.error(`✗ step ${index + 1} (${step.title}): the command prints a generated secret`);
+  }
+  if (/nano \.env|cat [^\n]*\.env|scp [^\n]*\.env/.test(step.command)
+      && !(step.manual && context.promptFor(step, index).includes("Nespouštěj"))) {
+    failed = true; console.error(`✗ step ${index + 1} (${step.title}): handles .env but is not a manual step`);
+  }
+});
 context.STEPS.forEach((step, index) => {
   if (step.todo) return;
   const prompt = context.promptFor(step, index);

@@ -221,15 +221,15 @@ ls ~/openwebui-local/scripts`,
     guides: [
       { label: "Kód systému na GitHubu", url: "https://github.com/PanLuce/openwebui-local" } ] },
 
-  { phase: "Hesla", title: "Vyplň .env",
+  { phase: "Hesla", title: "Vyplň .env", manual: true,
     why: "Soubor .env je trezor s klíči. Nové prostředí dostane nová hesla; ta, která jsou prázdná, vygeneruje bootstrap sám.",
-    where: "Na serveru jako gaudi. V editoru nano vyplň za rovnítko: LITELLM_MASTER_KEY (vygeneruje první příkaz níže), OPEN_TERMINAL_API_KEY (druhý), ANTHROPIC_API_KEY (Anthropic Console → workspace openwebui → API keys), GEMINI_API_KEY (Google AI Studio → API keys), WEBUI_URL=https://ai.skolagaudi.cz a PUBLIC_BIND_ADDRESS=0.0.0.0. OPENWEBUI_ADMIN_API_KEY nech prázdný.",
+    where: "Na serveru jako gaudi, sám (ne přes Claude). Příkaz sed zapíše nová hesla a adresu rovnou do souboru, nic nevypíše. V editoru nano pak vlož za rovnítko jen ANTHROPIC_API_KEY (Anthropic Console → workspace openwebui → API keys) a GEMINI_API_KEY (Google AI Studio → API keys). Ulož Ctrl+O, zavři Ctrl+X. OPENWEBUI_ADMIN_API_KEY nech prázdný.",
     command: `cd ~/openwebui-local
-echo "sk-$(openssl rand -hex 24)"
-openssl rand -hex 24
 cp .env.example .env && chmod 600 .env
-nano .env`,
-    see: "Žádný řádek v .env neobsahuje zástupný text (sk-..., change-me). Ulož Ctrl+O, zavři Ctrl+X.",
+sed -i -e "s|^LITELLM_MASTER_KEY=.*|LITELLM_MASTER_KEY=sk-$(openssl rand -hex 24)|" -e "s|^OPEN_TERMINAL_API_KEY=.*|OPEN_TERMINAL_API_KEY=$(openssl rand -hex 24)|" -e "s|^WEBUI_URL=.*|WEBUI_URL=https://ai.skolagaudi.cz|" -e "s|^PUBLIC_BIND_ADDRESS=.*|PUBLIC_BIND_ADDRESS=0.0.0.0|" .env
+nano .env
+grep -cE '^ANTHROPIC_API_KEY=sk-ant-api|^GEMINI_API_KEY=AIza' .env`,
+    see: "Poslední příkaz vypíše 2: oba klíče poskytovatelů jsou vyplněné. Žádná hodnota se neukáže.",
     guides: [
       { label: "Anthropic Console: workspaces", url: "https://console.anthropic.com/settings/workspaces" },
       { label: "Google AI Studio: API keys", url: "https://aistudio.google.com/apikey" } ] },
@@ -244,7 +244,7 @@ curl -sI https://ai.skolagaudi.cz/health | head -1`,
     guides: [
       { label: "Caddy: automatické HTTPS", url: "https://caddyserver.com/docs/automatic-https" } ] },
 
-  { phase: "Spuštění", title: "Založ první účet (správce)",
+  { phase: "Spuštění", title: "Založ první účet (správce)", manual: true,
     why: "První účet, který se zaregistruje, je správce. Udělej to hned, ať ho nezaloží nikdo jiný.",
     where: "V prohlížeči na https://ai.skolagaudi.cz → zaregistruj se. Pak Nastavení → Účet → API klíče → Vytvořit nový klíč. Na serveru ho vlož do .env za OPENWEBUI_ADMIN_API_KEY= a spusť bootstrap znovu.",
     command: `cd ~/openwebui-local
@@ -281,11 +281,11 @@ crontab -e`,
     guides: [
       { label: "crontab: formát řádku", url: "https://manpages.ubuntu.com/manpages/noble/en/man5/crontab.5.html" } ] },
 
-  { phase: "Zálohy", title: "Ulož .env do správce hesel",
+  { phase: "Zálohy", title: "Ulož .env do správce hesel", manual: true,
     why: "Záloha bez klíčů je trezor bez klíče. .env v záloze záměrně není, takže jeho kopie musí být ve správci hesel.",
-    where: "V terminálu na svém počítači. Příkaz soubor stáhne a otevře; jeho obsah vlož do správce hesel jako bezpečnou poznámku. Teprve potom soubor smaž: rm ~/gaudi-ai.env",
-    command: `scp gaudi-ai:openwebui-local/.env ~/gaudi-ai.env && open -e ~/gaudi-ai.env`,
-    see: "Ve správci hesel je záznam gaudi-ai .env; soubor na tvém počítači už není.",
+    where: "V terminálu na svém počítači, sám (ne přes Claude). Příkaz jen ukáže obsah souboru ze serveru, nic neukládá. Výpis zkopíruj do správce hesel jako bezpečnou poznámku a pak okno terminálu vyčisti (Cmd+K nebo příkaz clear).",
+    command: `ssh gaudi-ai 'cat openwebui-local/.env'`,
+    see: "Ve správci hesel je záznam gaudi-ai .env. Na tvém počítači žádný soubor nevznikl.",
     guides: [
       { label: "ssh: dokumentace", url: "https://man.openbsd.org/ssh" } ] },
 
@@ -336,6 +336,7 @@ function promptFor(step, index) {
     `Proč: ${step.why}`,
     `Kde: ${step.where}`,
   ];
+  if (step.manual) parts.push("Tento krok pracuje s tajemstvími. Nespouštěj jeho příkazy: vysvětli mi je, já je spustím sám. Pak ověř výsledek tak, aby se žádná hodnota nevypsala.");
   if (step.command) parts.push("Příkazy:\n```bash\n" + step.command + "\n```");
   parts.push(`Očekávaný výsledek: ${step.see}`);
   if (step.guides.length) parts.push("Oficiální návod:\n" + step.guides.map((guide) => `- ${guide.label}: ${guide.url}`).join("\n"));
