@@ -315,9 +315,9 @@ scripts/offsite.sh upload && scripts/offsite.sh list`,
 
   { phase: "Zálohy", title: "Ulož .env do správce hesel", short: "Uložení .env", manual: true,
     why: "Záloha bez klíčů je trezor bez klíče. .env (s heslem k šifře záloh na Drive) ani klíč robota v záloze záměrně nejsou, takže jejich kopie musí být ve správci hesel. Proto až teď, kdy .env obsahuje i nastavení Drive.",
-    where: "V terminálu na svém počítači, sám (ne přes Claude). Příkaz jen ukáže obsah souboru ze serveru, nic neukládá. Výpis zkopíruj do správce hesel jako bezpečnou poznámku a pak okno terminálu vyčisti (Cmd+K nebo příkaz clear). Do stejného záznamu přilož soubor drive-backup.json ze složky Stažené soubory; poslední příkaz ho pak z počítače smaže.",
+    where: "V terminálu na svém počítači, sám (ne přes Claude). Příkaz jen ukáže obsah souboru ze serveru, nic neukládá. Výpis zkopíruj do správce hesel jako bezpečnou poznámku a pak okno terminálu vyčisti (Cmd+K nebo příkaz clear). Do stejného záznamu přilož soubor drive-backup.json ze složky Stažené soubory. Druhý příkaz počká na tvůj Enter a teprve pak klíč z počítače smaže.",
     command: `ssh gaudi-ai 'cat openwebui-local/.env'
-rm ~/Downloads/drive-backup.json`,
+read -r -p 'Je .env i drive-backup.json ve správci hesel? Enter smaže klíč z tohoto počítače: ' && rm ~/Downloads/drive-backup.json`,
     see: "Ve správci hesel je záznam gaudi-ai .env s přílohou drive-backup.json. Na tvém počítači klíč robota už není.",
     guides: [
       { label: "ssh: dokumentace", url: "https://man.openbsd.org/ssh" } ] },

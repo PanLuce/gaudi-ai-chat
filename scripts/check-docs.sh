@@ -246,7 +246,7 @@ if (process.env.SIGNUP_OPEN !== "true") {
 }
 // The copy in the password manager must hold everything a restore on a new server needs.
 const saved = guide.STEPS[at("Ulož .env do správce hesel")], drive = at("Zálohy mimo server (Google Drive)");
-if (!saved || at("Ulož .env do správce hesel") < drive || !/drive-backup\.json/.test(text(saved))) {
+if (!saved || drive < 0 || at("Ulož .env do správce hesel") < drive || !/drive-backup\.json/.test(text(saved))) {
   failed = true; console.error("✗ the .env copy in the password manager is made before the Drive settings, or without the Drive key");
 }
 // Each provider has its own spending cap, set by the admin, behind the budgets in the Gateway.
