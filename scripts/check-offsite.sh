@@ -2,8 +2,8 @@
 # Checks the copy of backups on the school's Google Drive (scripts/offsite.sh).
 # Always, free and offline: a missing setting stops offsite.sh with its name, and rclone gets exactly
 # the Drive and encryption settings from .env.
-# Only when .env has the Drive settings: a real backup goes to Drive under a smoke-offsite-<time> folder,
-# comes back byte for byte, and the folder is deleted. Chat stops for a few seconds for that backup.
+# Only when .env has the Drive settings: a few random files go to Drive under a smoke-offsite-<time> folder,
+# come back byte for byte, and the folder is deleted. Chat keeps running.
 set -euo pipefail
 . "$(dirname "$0")/offsite.sh"
 
@@ -76,24 +76,25 @@ delete_offsite_folder() {
   offsite_rclone purge "offsite:$1.partial" >/dev/null 2>&1 || true
 }
 
-# A real backup goes up under the check's own folder name, comes back under another and must match byte
-# for byte. Restoring it into the databases is check-backup-restore.sh's job, not a server in use.
+# A folder of random files goes up under the check's own name, comes back under another and must match
+# byte for byte. Synthetic on purpose: a real backup would stop Chat, and backup.sh has its own check.
 assert_backup_survives_the_round_trip() {
-  local name file
+  local file
   BACKUP_ROOT=$(mktemp -d)
-  export BACKUP_ROOT
   on_exit_cleanup delete_offsite_folder "$TAG" # before rm: offsite_rclone re-creates BACKUP_ROOT
   on_exit_cleanup rm -rf "$BACKUP_ROOT"
-  name=$("$REPO_ROOT/scripts/backup.sh" | tail -1) || fail "could not make a backup to upload"
-  name=${name##*/}
+  mkdir "$BACKUP_ROOT/$TAG-source"
+  for file in openwebui.dump litellm.dump open-webui-data.tar.gz; do
+    head -c 200000 /dev/urandom > "$BACKUP_ROOT/$TAG-source/$file"
+  done
   open_rclone_settings
-  upload_backup "$name" "$TAG"
-  grep -qx "$TAG" <<<"$(offsite_folders)" || fail "the uploaded backup $TAG is not on Google Drive"
+  upload_backup "$TAG-source" "$TAG"
+  grep -qx "$TAG" <<<"$(offsite_folders)" || fail "the uploaded folder $TAG is not on Google Drive"
   download_backup "$TAG" "$TAG-back"
-  for file in "$BACKUP_ROOT/$name"/*; do
+  for file in "$BACKUP_ROOT/$TAG-source"/*; do
     cmp -s "$file" "$BACKUP_ROOT/$TAG-back/${file##*/}" || fail "${file##*/} came back from Google Drive different"
   done
-  pass "a backup goes to Google Drive encrypted and comes back byte for byte"
+  pass "files go to Google Drive encrypted and come back byte for byte"
 }
 
 main_check() {

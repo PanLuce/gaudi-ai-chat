@@ -83,26 +83,22 @@ check_openwebui_offers_claude_models() {
   pass "Open WebUI offers $EXPECTED_TEXT_MODELS"
 }
 
-# Which models staff see is the admin's configuration; only the default one must be there,
-# otherwise nobody can chat. Checked as a regular user, since admins see every model.
-check_staff_member_sees_default_model() {
-  local default offered
+
+
+
+# One staff account for two facts. Which models staff see is the admin's configuration; only the default
+# one must be there, otherwise nobody can chat (checked as a regular user, since admins see every model).
+# Then the same person goes over budget. Free: the budget check runs before any provider call, and a
+# blocked request also proves that Open WebUI forwards the user's e-mail, since LiteLLM finds the budget by it.
+check_staff_member() {
+  local email other default offered
   default=$(openwebui_admin GET /api/v1/configs/models | jq -r '.DEFAULT_MODELS // empty' | cut -d, -f1)
   [ -n "$default" ] || fail "Open WebUI has no default model"
-  create_temporary_staff_user "$(unique_smoke_email)"
+  email=$(unique_smoke_email)
+  create_temporary_staff_user "$email"
   offered=$(api_request "$TEMP_USER_TOKEN" GET "$OPENWEBUI_URL/api/models" | jq -r '.data[].id' | xargs)
   grep -qw -- "$default" <<<"$offered" || fail "a staff member cannot use the default model $default (sees: $offered)"
   pass "a staff member can use the default model $default"
-}
-
-
-
-# Free: the budget check runs before any provider call. A blocked request also proves that
-# Open WebUI forwards the user's e-mail, since LiteLLM can only find the budget through it.
-check_overspent_user_is_blocked_in_openwebui() {
-  local email other
-  email=$(unique_smoke_email)
-  create_temporary_staff_user "$email"
   create_temporary_customer "$email" 6
   assert_blocked_by_budget /api/chat/completions "$SMALL_CHAT" "$email"
   pass "a user over budget is blocked in Open WebUI with a Czech message"
@@ -186,9 +182,9 @@ check_config_error_message_is_czech() {
 }
 
 # Provider errors cannot be caused for free, so the mapping runs against LiteLLM's own exception
-# classes inside the LiteLLM image, without network.
+# classes inside the running LiteLLM container, without network.
 check_provider_errors_are_czech() {
-  compose run --rm --no-deps -T --entrypoint python litellm - <<'PY_CHECK' || fail "a provider error has no Czech message"
+  compose exec -T litellm python - <<'PY_CHECK' || fail "a provider error has no Czech message"
 import sys, httpx, litellm
 sys.path.insert(0, "/app")
 from czech_errors import czech_message
@@ -227,9 +223,8 @@ run_free_checks() {
   check_only_caddy_is_published
   check_openwebui_knows_its_public_address
   check_openwebui_offers_claude_models
-  check_staff_member_sees_default_model
   check_admin_runs_commands_in_the_terminal
-  check_overspent_user_is_blocked_in_openwebui
+  check_staff_member
   check_school_budget_message_is_czech
   check_config_error_message_is_czech
   check_provider_errors_are_czech

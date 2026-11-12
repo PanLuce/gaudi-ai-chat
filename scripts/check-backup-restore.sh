@@ -81,7 +81,9 @@ assert_failed_chat_restart_is_logged() {
 lose_the_data() {
   openwebui_admin DELETE "/api/v1/chats/$CHAT_ID" >/dev/null || fail "could not delete the test chat"
   openwebui_admin DELETE "/api/v1/files/$FILE_ID" >/dev/null || fail "could not delete the test file"
+  delete_search_entries "$SEARCH_FILE_ID" || fail "could not delete the searchable file from the search index"
   openwebui_admin DELETE "/api/v1/files/$SEARCH_FILE_ID" >/dev/null || fail "could not delete the searchable test file"
+  ! file_search_finds_text || fail "file search still finds the text after deleting it from the index"
   delete_litellm_customer "$SPEND_EMAIL"
   ! chat_exists || fail "the test chat is still there after deleting it"
 }
@@ -108,8 +110,6 @@ assert_data_is_back() {
   pass "a deleted chat is back (Open WebUI database)"
   [ "$(file_content)" = "$FILE_CONTENT" ] || fail "the uploaded file did not come back from the backup"
   pass "a deleted uploaded file is back (Open WebUI volume)"
-  # Deleting a file in Open WebUI 0.13.3 leaves its vectors in Chroma, so the search can't be "lost" first.
-  # The proof is restore.sh: it empties the volume (vector_db/ too) before unpacking the backup.
   file_search_finds_text || fail "file search does not find the deleted file's text after the restore"
   pass "file search finds a deleted file's text again (search index)"
   [ "$(recorded_spend)" = "$SPEND_USD" ] || fail "the spend of $SPEND_EMAIL did not come back (got: $(recorded_spend))"
