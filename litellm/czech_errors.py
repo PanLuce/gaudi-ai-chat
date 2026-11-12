@@ -13,6 +13,11 @@ import litellm
 from litellm.integrations.custom_logger import CustomLogger
 
 PERSONAL_BUDGET = "rozpocet"
+SCHOOL_BUDGET = "rozpocet-skoly"
+
+# Budgets above a single person: the key Open WebUI uses (the school's budget), or a team.
+SHARED_BUDGET_ENTITIES = {"key", "team"}
+SCHOOL_BUDGET_TEXT = "AI chat má tento měsíc vyčerpaný rozpočet celé školy. Dej vědět správci."
 
 
 def format_usd(amount: float) -> str:
@@ -44,6 +49,8 @@ def czech_message(exc: Exception, reset_at: datetime | None = None) -> tuple[str
     """Returns (code, Czech text) for an error a person can see, or None to keep the original."""
     if is_personal_budget(exc):
         return PERSONAL_BUDGET, personal_budget_message(exc.max_budget, reset_at)
+    if isinstance(exc, litellm.BudgetExceededError) and getattr(exc, "entity_type", None) in SHARED_BUDGET_ENTITIES:
+        return SCHOOL_BUDGET, SCHOOL_BUDGET_TEXT
     return None
 
 

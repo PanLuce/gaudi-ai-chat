@@ -183,6 +183,25 @@ assert_blocked_by_budget() {
     || fail "the budget message shows the e-mail or LiteLLM internals: $(head -c 300 <<<"$response")"
 }
 
+# The school's budget lives on the key Open WebUI uses. A temporary key with spend over its budget
+# gets the same error. Free only if LiteLLM really recorded the spend, so that is checked before
+# the call: otherwise the request would reach the provider.
+check_school_budget_message_is_czech() {
+  local alias key response
+  alias="smoke-$(date +%s)-$RANDOM"
+  key=$(litellm_admin POST /key/generate "$(jq -cn --arg a "$alias" '{key_alias: $a, max_budget: 1, spend: 2, models: ["claude-haiku"]}')" \
+    | jq -er .key) || fail "could not create temporary key $alias"
+  on_exit_cleanup delete_litellm_key_alias "$alias"
+  [ "$(litellm_as "$key" GET /key/info | jq -r '.info.spend')" = "2.0" ] \
+    || fail "temporary key $alias has no recorded spend; refusing a call that could be paid"
+  response=$(litellm_as "$key" POST /v1/chat/completions "$SMALL_CHAT" 2>/dev/null || true)
+  grep -q "AI chat má tento měsíc vyčerpaný rozpočet celé školy" <<<"$response" && grep -q "(kód: rozpocet-skoly)" <<<"$response" \
+    || fail "a key over budget did not get the Czech school budget message: $(head -c 300 <<<"$response")"
+  ! grep -qE "Key=|Budget has been exceeded" <<<"$response" \
+    || fail "the school budget message shows LiteLLM internals: $(head -c 300 <<<"$response")"
+  pass "when the school budget runs out, people get a Czech message"
+}
+
 check_haiku_answers_in_openwebui() {
   local response answer
   response=$(openwebui_admin POST /api/chat/completions \
@@ -207,6 +226,7 @@ run_free_checks() {
   check_admin_runs_commands_in_the_terminal
   check_default_staff_budget
   check_overspent_user_is_blocked_in_openwebui
+  check_school_budget_message_is_czech
 }
 
 # Paid: a real answer for a staff member is charged to that person's e-mail.
