@@ -1,0 +1,17 @@
+# The single entry to the stack. The site address is the public address of Open WebUI:
+# locally http://localhost (plain HTTP), in production https://ai.skolagaudi.cz, for which
+# Caddy obtains and renews the Let's Encrypt certificate itself.
+{$WEBUI_URL} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# WebSockets (streamed chat answers) and server-sent events pass through without extra config.
+	reverse_proxy open-webui:8080
+}

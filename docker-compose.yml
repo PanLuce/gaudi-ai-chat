@@ -1,19 +1,107 @@
 name: openwebui-local
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
+  # The only service people reach. Locally bound to 127.0.0.1; on the server PUBLIC_BIND_ADDRESS=0.0.0.0.
+  caddy:
+    image: caddy:2.11.6-alpine
+    ports:
+      - "${PUBLIC_BIND_ADDRESS:-127.0.0.1}:80:80"
+      - "${PUBLIC_BIND_ADDRESS:-127.0.0.1}:443:443"
+      - "${PUBLIC_BIND_ADDRESS:-127.0.0.1}:443:443/udp"
+    environment:
+      WEBUI_URL: ${WEBUI_URL:-http://localhost}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      open-webui:
+        condition: service_healthy
+    healthcheck:
+      # Caddy's admin endpoint answers regardless of the site address.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    mem_limit: 256m
+    logging: *default-logging
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:18.1-alpine
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run scripts/bootstrap.sh}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 512m
+    logging: *default-logging
+    restart: unless-stopped
+
+  # One-shot: creates the per-application databases, idempotent on every `up`.
+  db-init:
+    image: postgres:18.1-alpine
+    command: ["sh", "/ensure-databases.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD:?run scripts/bootstrap.sh}
+      LITELLM_DB_PASSWORD: ${LITELLM_DB_PASSWORD:?run scripts/bootstrap.sh}
+      OPENWEBUI_DB_PASSWORD: ${OPENWEBUI_DB_PASSWORD:?run scripts/bootstrap.sh}
+    volumes:
+      - ./postgres/ensure-databases.sh:/ensure-databases.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+    restart: "no"
+
   open-webui:
     image: ghcr.io/open-webui/open-webui:0.13.3
-    ports:
-      - "127.0.0.1:3000:8080"
+    # No published port: people reach it only through caddy.
+    expose:
+      - "8080"
     environment:
+      DATABASE_URL: postgresql://openwebui:${OPENWEBUI_DB_PASSWORD:?run scripts/bootstrap.sh}@postgres:5432/openwebui
+      # Fixed key: sessions survive container recreation (upgrades).
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?run scripts/bootstrap.sh}
+      # Seeds a fresh database; scripts/bootstrap.sh keeps it in sync with .env.
+      WEBUI_URL: ${WEBUI_URL:-http://localhost}
+      DEFAULT_LOCALE: cs-CZ
+      # Admins see usage analytics, not the content of staff conversations.
+      ENABLE_ADMIN_CHAT_ACCESS: "false"
+      # Seeds a fresh database; scripts need an admin API key.
+      ENABLE_API_KEYS: "true"
       OPENAI_API_BASE_URL: http://litellm:4000/v1
-      OPENAI_API_KEY: ${LITELLM_MASTER_KEY:?set LITELLM_MASTER_KEY in .env}
+      # Sends X-OpenWebUI-User-Email etc., which LiteLLM uses to charge each person's budget.
+      ENABLE_FORWARD_USER_INFO_HEADERS: "true"
+      # Seeds a fresh database; scripts/bootstrap.sh keeps the image settings in sync.
+      ENABLE_IMAGE_GENERATION: "true"
+      IMAGE_GENERATION_ENGINE: openai
+      IMAGES_OPENAI_API_BASE_URL: http://litellm:4000/v1
+      IMAGES_OPENAI_API_KEY: ${OPENWEBUI_LITELLM_KEY:-}
+      IMAGE_GENERATION_MODEL: gemini-image
+      IMAGE_SIZE: 1024x1024
+      # Seeds the connection on a fresh database only; afterwards scripts/bootstrap.sh keeps it in sync.
+      OPENAI_API_KEY: ${OPENWEBUI_LITELLM_KEY:-}
       ANONYMIZED_TELEMETRY: "false"
       DO_NOT_TRACK: "true"
       SCARF_NO_ANALYTICS: "true"
     volumes:
       - open-webui-data:/app/backend/data
     depends_on:
+      db-init:
+        condition: service_completed_successfully
       litellm:
         condition: service_healthy
       open-terminal:
@@ -24,6 +112,8 @@ services:
       timeout: 5s
       retries: 10
       start_period: 60s
+    mem_limit: 2g
+    logging: *default-logging
     restart: unless-stopped
 
   litellm:
@@ -33,14 +123,25 @@ services:
       - "127.0.0.1:4000:4000"
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set LITELLM_MASTER_KEY in .env}
+      DATABASE_URL: postgresql://litellm:${LITELLM_DB_PASSWORD:?run scripts/bootstrap.sh}@postgres:5432/litellm
+      STORE_MODEL_IN_DB: "False"
+      UI_USERNAME: admin
+      UI_PASSWORD: ${LITELLM_UI_PASSWORD:?run scripts/bootstrap.sh}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?set GEMINI_API_KEY in .env}
     volumes:
       - ./litellm/config.yaml:/app/config.yaml:ro
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "/usr/bin/python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness')"]
       interval: 15s
       timeout: 5s
       retries: 10
-      start_period: 30s
+      start_period: 60s
+    mem_limit: 1g
+    logging: *default-logging
     restart: unless-stopped
 
   open-terminal:
@@ -57,7 +158,12 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+    mem_limit: 512m
+    logging: *default-logging
     restart: unless-stopped
 
 volumes:
+  caddy-data: # certificates in production
+  caddy-config:
   open-webui-data:
+  postgres-data:
