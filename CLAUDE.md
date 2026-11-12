@@ -1,6 +1,6 @@
 # openwebui-local
 
-Open WebUI + LiteLLM + Postgres stack for Škola Gaudi staff. See README.md for how to run it.
+Caddy + Open WebUI + LiteLLM + Postgres + open-terminal stack for Škola Gaudi staff (Vchod, Chat, Brána, Databáze, Terminál in the docs). See README.md for how to run it.
 
 ## Rules
 - Build only what production will run. No stand-ins (mock models, local IdP, self-signed CA); only `.env` values differ between local and production.

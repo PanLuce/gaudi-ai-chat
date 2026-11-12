@@ -229,6 +229,48 @@ JS
   pass "docs/nasazeni.html: the nightly backup is copied to Google Drive"
 }
 
+# Sign-up is closed (WEBUI_ADMIN_EMAIL) until Google login (#3) lands in docker-compose.yml.
+check_guide_matches_the_stack() {
+  local signup_open=false
+  grep -q ENABLE_OAUTH_SIGNUP "$REPO_ROOT/docker-compose.yml" && signup_open=true
+  SIGNUP_OPEN=$signup_open run_guide_check "docs/nasazeni.html: a step does not match how the stack works" <<'JS'
+let failed = false;
+const at = (title) => guide.STEPS.findIndex((step) => step.title === title);
+const text = (step) => [step.why, step.where, step.see].join(" ");
+if (process.env.SIGNUP_OPEN !== "true") {
+  guide.STEPS.forEach((step, index) => {
+    if (/zaregistr/i.test(text(step))) {
+      failed = true; console.error(`✗ step ${index + 1} (${step.title}): sends people to sign up, but sign-up is closed`);
+    }
+  });
+}
+// The copy in the password manager must hold everything a restore on a new server needs.
+const saved = guide.STEPS[at("Ulož .env do správce hesel")], drive = at("Zálohy mimo server (Google Drive)");
+if (!saved || drive < 0 || at("Ulož .env do správce hesel") < drive || !/drive-backup\.json/.test(text(saved))) {
+  failed = true; console.error("✗ the .env copy in the password manager is made before the Drive settings, or without the Drive key");
+}
+// Each provider has its own spending cap, set by the admin, behind the budgets in the Gateway.
+if (!guide.STEPS.some((step) => /Monthly spend cap/.test(text(step)))) {
+  failed = true; console.error("✗ no step sets the Gemini spend cap in Google AI Studio");
+}
+process.exit(failed ? 1 : 0);
+JS
+  pass "docs/nasazeni.html: the guide matches closed sign-up, the backup keys and the provider caps"
+}
+
+# On a new server the old .env holds keys that exist only in the old databases, so bootstrap can run only
+# after the restore has brought them back.
+check_readme_restore_order() {
+  local recipe restore_line bootstrap_line
+  recipe=$(awk '/^### Obnova z Google Drive/{on=1} on && /^```sh/{code=1; next} code && /^```/{exit} code' "$REPO_ROOT/README.md")
+  [ -n "$recipe" ] || fail "README.md has no ### Obnova z Google Drive with a sh block"
+  restore_line=$(grep -n 'scripts/restore.sh' <<<"$recipe" | head -1 | cut -d: -f1)
+  bootstrap_line=$(grep -n 'scripts/bootstrap.sh' <<<"$recipe" | head -1 | cut -d: -f1)
+  [ -n "$restore_line" ] && [ -n "$bootstrap_line" ] && [ "$bootstrap_line" -gt "$restore_line" ] \
+    || fail "README.md: the restore from Google Drive must run scripts/bootstrap.sh after scripts/restore.sh"
+  pass "README.md: the restore from Google Drive runs bootstrap only after the databases are back"
+}
+
 main() {
   require_tools curl gh grep node
   local page
@@ -245,6 +287,8 @@ main() {
   check_guide_phase_steps
   check_overview_trip
   check_guide_offsite_copy
+  check_guide_matches_the_stack
+  check_readme_restore_order
 }
 
 main "$@"

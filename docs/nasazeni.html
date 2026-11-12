@@ -106,7 +106,7 @@ footer { color: var(--muted); font-size: 14px; }
     <button type="button" class="next" id="next">Další →</button>
   </nav>
 
-  <footer>Příkazy pocházejí ze skriptů v repu (scripts/bootstrap.sh, scripts/smoke.sh, scripts/backup.sh). Průvodce se ověří při prvním skutečném nasazení; co nebude sedět, oprav tady.</footer>
+  <footer>Příkazy pocházejí ze skriptů v repu (složka scripts/). Průvodce se ověří při prvním skutečném nasazení; co nebude sedět, oprav tady.</footer>
 </div>
 
 <script id="guide-data">
@@ -120,6 +120,14 @@ const STEPS = [
       { label: "Anthropic: workspace openwebui a jeho klíče", url: "https://console.anthropic.com/settings/workspaces" },
       { label: "Google AI Studio: klíč pro obrázky", url: "https://aistudio.google.com/apikey" },
       { label: "Gemini API: placená úroveň", url: "https://ai.google.dev/gemini-api/docs/billing" } ] },
+
+  { phase: "Příprava", title: "Nastav stropy u poskytovatelů", short: "Stropy",
+    why: "Brána hlídá 5 $ na člověka a 100 $ na celou školu. Strop přímo u poskytovatele je doporučená pojistka pro případ, že by Brána selhala: víc, než kolik nastavíš, poskytovatel za měsíc nevyúčtuje. Výši určuješ ty podle rozpočtu školy; systém na ni nijak nesahá.",
+    where: "V prohlížeči. Anthropic Console → Settings → Workspaces → openwebui → Limits (doporučení: měsíčně 100 $, stejně jako strop školy v Bráně). Google AI Studio → Spend → Monthly spend cap → Edit spend cap u projektu, ze kterého je klíč Gemini (doporučení: 20 $, obrázek stojí asi 0,045 $). Google útratu sčítá s několikaminutovým zpožděním, strop proto může být o kousek překročen.",
+    see: "U workspace openwebui je měsíční limit a v AI Studio u projektu Monthly spend cap ve výši, kterou jsi zvolil.",
+    guides: [
+      { label: "Anthropic Console: workspaces a jejich limity", url: "https://console.anthropic.com/settings/workspaces" },
+      { label: "Gemini API: billing a spend cap", url: "https://ai.google.dev/gemini-api/docs/billing" } ] },
 
   { phase: "Server", title: "Založ účet a projekt u Hetzneru", short: "Účet a projekt",
     why: "Hetzner pronajímá počítače v datacentru v Německu. Účet je jako nájemní smlouva, projekt je složka, kam se server uloží.",
@@ -242,7 +250,7 @@ grep -cE '^ANTHROPIC_API_KEY=sk-ant-api|^GEMINI_API_KEY=AIza|^WEBUI_ADMIN_EMAIL=
     command: `cd ~/openwebui-local
 scripts/bootstrap.sh
 curl --retry 10 --retry-delay 6 --retry-all-errors -sI https://ai.skolagaudi.cz/health | head -1`,
-    see: "„✓ bootstrap done“ a poslední řádek HTTP/2 200. Vchod si při prvním spuštění vyřizuje HTTPS certifikát několik desítek sekund; poslední příkaz to zkouší až minutu. Bootstrap napíše, že přeskočil kroky správce, protože ještě není admin.",
+    see: "„✓ bootstrap done“ a poslední řádek HTTP/2 200. Vchod si při prvním spuštění vyřizuje HTTPS certifikát několik desítek sekund; poslední příkaz to zkouší až minutu. Bootstrap napíše, že přeskočil kroky správce, protože ještě nemá API klíč správce.",
     guides: [
       { label: "Caddy: automatické HTTPS", url: "https://caddyserver.com/docs/automatic-https" } ] },
 
@@ -277,7 +285,7 @@ ssh -N -L 4000:127.0.0.1:4000 gaudi-ai`,
       { label: "ssh: volba -L (tunel)", url: "https://man.openbsd.org/ssh" } ] },
 
   { phase: "Zálohy", title: "Zapni noční zálohu", short: "Noční záloha",
-    why: "Záloha je fotka všech dat. Každou noc se udělá nová a drží se posledních 14. Chat se na ni na pár sekund zastaví, proto ve 2:30. Hned po ní se kopie zašifrovaná nahraje na Google Drive (nastavíš v dalším kroku; do té doby kopie v logu hlásí ✗).",
+    why: "Záloha je fotka všech dat. Každou noc se udělá nová a drží se posledních 14. Chat se na ni asi na 15 sekund zastaví, proto ve 2:30 času serveru (UTC, v Praze 3:30 nebo 4:30). Hned po ní se kopie zašifrovaná nahraje na Google Drive (nastavíš v kroku Zálohy mimo server; do té doby kopie v logu hlásí ✗).",
     where: "Na serveru jako gaudi. Druhý příkaz zapíše noční zálohu do crontabu; starší řádek se zálohou nahradí, takže tam je vždy jen jednou.",
     command: `cd ~/openwebui-local && mkdir -p backups && scripts/backup.sh
 line='30 2 * * * cd /home/gaudi/openwebui-local && { scripts/backup.sh && scripts/offsite.sh upload; } >> backups/backup.log 2>&1'; (crontab -l 2>/dev/null | grep -vF 'scripts/backup.sh'; echo "$line") | crontab -
@@ -285,14 +293,6 @@ crontab -l`,
     see: "První příkaz končí „✓ backup complete“ a cestou ke složce. crontab -l ukáže nový řádek.",
     guides: [
       { label: "crontab: formát řádku", url: "https://manpages.ubuntu.com/manpages/noble/en/man5/crontab.5.html" } ] },
-
-  { phase: "Zálohy", title: "Ulož .env do správce hesel", short: "Uložení .env", manual: true,
-    why: "Záloha bez klíčů je trezor bez klíče. .env v záloze záměrně není, takže jeho kopie musí být ve správci hesel.",
-    where: "V terminálu na svém počítači, sám (ne přes Claude). Příkaz jen ukáže obsah souboru ze serveru, nic neukládá. Výpis zkopíruj do správce hesel jako bezpečnou poznámku a pak okno terminálu vyčisti (Cmd+K nebo příkaz clear).",
-    command: `ssh gaudi-ai 'cat openwebui-local/.env'`,
-    see: "Ve správci hesel je záznam gaudi-ai .env. Na tvém počítači žádný soubor nevznikl.",
-    guides: [
-      { label: "ssh: dokumentace", url: "https://man.openbsd.org/ssh" } ] },
 
   { phase: "Zálohy", title: "Zálohy mimo server (Google Drive)", short: "Mimo server", manual: true,
     why: "Kdyby server zmizel, zmizí i zálohy na něm. Každá noční záloha se proto zašifrovaná nahraje na sdílený disk školy a drží se posledních 30. Zapisuje tam robot (servisní účet), ne člověk, takže kopie přežijí i odchod kohokoli ze školy.",
@@ -313,10 +313,19 @@ scripts/offsite.sh upload && scripts/offsite.sh list`,
       { label: "rclone: Google Drive se servisním účtem", url: "https://rclone.org/drive/#service-account-support" },
       { label: "rclone: šifrování (crypt)", url: "https://rclone.org/crypt/" } ] },
 
+  { phase: "Zálohy", title: "Ulož .env do správce hesel", short: "Uložení .env", manual: true,
+    why: "Záloha bez klíčů je trezor bez klíče. .env (s heslem k šifře záloh na Drive) ani klíč robota v záloze záměrně nejsou, takže jejich kopie musí být ve správci hesel. Proto až teď, kdy .env obsahuje i nastavení Drive.",
+    where: "V terminálu na svém počítači, sám (ne přes Claude). Příkaz jen ukáže obsah souboru ze serveru, nic neukládá. Výpis zkopíruj do správce hesel jako bezpečnou poznámku a pak okno terminálu vyčisti (Cmd+K nebo příkaz clear). Do stejného záznamu přilož soubor drive-backup.json ze složky Stažené soubory. Druhý příkaz počká na tvůj Enter a teprve pak klíč z počítače smaže.",
+    command: `ssh gaudi-ai 'cat openwebui-local/.env'
+read -r -p 'Je .env i drive-backup.json ve správci hesel? Enter smaže klíč z tohoto počítače: ' && rm ~/Downloads/drive-backup.json`,
+    see: "Ve správci hesel je záznam gaudi-ai .env s přílohou drive-backup.json. Na tvém počítači klíč robota už není.",
+    guides: [
+      { label: "ssh: dokumentace", url: "https://man.openbsd.org/ssh" } ] },
+
   { phase: "Předání", title: "Předej chat lidem", short: "Předání",
-    why: "Až kontrola svítí zeleně, otevřeš dveře. Lidé se zaregistrují a ty je schválíš.",
-    where: "Pošli kolegům odkaz https://ai.skolagaudi.cz. Kdo se zaregistruje, čeká na schválení: Chat → Admin Panel → Users → změnit roli na user.",
-    see: "Schválený kolega píše s Claude Haiku; v Bráně se mu počítá útrata.",
+    why: "Až kontrola svítí zeleně, otevřeš dveře. Registrace je zavřená (nikdo cizí se nepřihlásí), proto účty zakládáš ty. Přihlášení školním účtem Google přijde později.",
+    where: "V Chatu na https://ai.skolagaudi.cz: Administrace → Uživatelé → Přehled → + (Přidat uživatele). Vyplň jméno, školní e-mail a heslo, role uživatel. Kolegovi pošli adresu a heslo zvlášť, třeba e-mail a SMS; heslo si pak změní v Nastavení → Účet.",
+    see: "Kolega se přihlásí, píše s Claude Haiku a v Bráně se mu počítá útrata.",
     guides: [
       { label: "Open WebUI: dokumentace", url: "https://docs.openwebui.com/" } ] },
 

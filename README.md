@@ -1,85 +1,92 @@
 # Open WebUI pro Školu Gaudi
 
-AI chat pro zaměstnance: Caddy → Open WebUI → LiteLLM (rozpočty, útrata) → Anthropic / Gemini. Lokálně běží
-stejná sestava jako v produkci; liší se jen hodnoty v `.env`.
+AI chat pro zaměstnance: Vchod (Caddy) → Chat (Open WebUI) → Brána (LiteLLM: rozpočty, útrata) →
+Poskytovatelé (Anthropic, Google). Data drží Databáze (Postgres). Lokálně běží stejná sestava jako
+v produkci; liší se jen hodnoty v `.env`. Nasazení na server: [docs/nasazeni.html](docs/nasazeni.html).
 
-## Spuštění
+## Spuštění (lokálně)
 
-1. `cp .env.example .env` a vyplň `LITELLM_MASTER_KEY`, `OPEN_TERMINAL_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`
-   a `WEBUI_ADMIN_EMAIL` (tvůj e-mail = účet správce Chatu).
-2. `scripts/bootstrap.sh` — vygeneruje chybějící hesla (i `WEBUI_ADMIN_PASSWORD`), spustí stack, založí klíč Open WebUI
-   v LiteLLM. Chat při prvním startu s prázdnou databází založí správce z `.env` a zavře registraci.
-3. Otevři `http://localhost`, přihlas se jako správce (heslo `WEBUI_ADMIN_PASSWORD` v `.env`). Rozhraní je česky; pokud
-   prohlížeč pamatuje jiný jazyk z dřívějška, přepni ho v Nastavení → Obecné → Jazyk.
+1. `cp .env.example .env` a vyplň `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `WEBUI_ADMIN_EMAIL` (tvůj e-mail =
+   účet správce Chatu), `LITELLM_MASTER_KEY` (`sk-` + náhodný text, např. `sk-$(openssl rand -hex 24)`)
+   a `OPEN_TERMINAL_API_KEY` (`openssl rand -hex 24`).
+2. `scripts/bootstrap.sh` — vygeneruje ostatní hesla (i `WEBUI_ADMIN_PASSWORD`), spustí stack a založí klíč
+   Chatu v Bráně. Chat při prvním startu s prázdnou databází založí správce z `.env` a zavře registraci.
+3. Otevři `http://localhost` a přihlas se jako správce (heslo `WEBUI_ADMIN_PASSWORD` v `.env`). Rozhraní je
+   česky; když prohlížeč pamatuje jiný jazyk, přepni ho v Nastavení → Obecné → Jazyk.
 4. **Admin API key:** Nastavení → Účet → API klíče → vytvořit, uložit do `.env` jako
    `OPENWEBUI_ADMIN_API_KEY`. Nová databáze = nový klíč.
-5. Znovu `scripts/bootstrap.sh` (nastaví připojení Open WebUI → LiteLLM) a `scripts/smoke.sh`.
+5. Znovu `scripts/bootstrap.sh` (připojí Chat k Bráně) a `scripts/smoke.sh`.
 
 ## Skripty
+
+Podrobnosti jsou v hlavičce každého skriptu. Kontroly jsou zdarma, pokud není řečeno jinak.
 
 | Skript | Co dělá |
 |---|---|
 | `scripts/bootstrap.sh` | Uvede stack do nakonfigurovaného stavu; lze spouštět opakovaně. |
-| `scripts/smoke.sh` | Ověří běžící stack přes porty, které používají lidé. Zdarma. |
-| `scripts/demo-staff.sh` | Ruční ukázka: dočasný účet běžného uživatele — co vidí zaměstnanec (modely, terminál, obrázky); po Enteru se smaže. Zdarma. |
-| `scripts/demo-over-budget.sh` | Ruční ukázka: dočasný účet přes rozpočet, vyzkoušíš v prohlížeči, po Enteru se smaže. Zdarma. |
-| `scripts/check-bootstrap-secrets.sh` | Ověří, že bootstrap na čerstvém `.env` z `.env.example` vygeneruje všechna hesla a bez `WEBUI_ADMIN_EMAIL` se zastaví. Skutečný `.env` nemění. |
-| `scripts/check-first-admin.sh` | Spustí dočasný Chat s prázdnou databází: správce z `.env` se přihlásí, registrace je zavřená. Běžícího stacku se nedotkne. Zdarma. |
-| `scripts/check-docs.sh` | Ověří stránky v `docs/`: odkazy odpovídají, jeden slovník názvů, žádná tajemství a každý krok průvodce má úplný prompt pro Claude Code (potřebuje `node`). Zdarma. |
-| `scripts/backup.sh` | Záloha obou databází a souborů Open WebUI do `backups/<čas>/`, drží posledních 14. |
-| `scripts/restore.sh <adresář>` | Obnova ze zálohy; vše od zálohy se ztratí (ptá se, `--yes` bez ptaní). Nejdřív celou zálohu přečte nanečisto — poškozenou odmítne a nic nezmění — a uloží aktuální stav jako další zálohu, takže jde vrátit i obnova. |
-| `scripts/check-backup-restore.sh` | Ověří, že záloha vrátí smazaný chat, soubor i útratu a že poškozenou zálohu obnova odmítne. **Ne na serveru v provozu** — obnova vrací databáze do okamžiku zálohy. Zdarma. |
-| `scripts/offsite.sh upload \| list \| download <čas>` | Zašifrovaná kopie nejnovější zálohy na sdílený disk školy na Google Drive (drží posledních 30); `list` ukáže zálohy na Drive a stáří nejnovější; `download` stáhne zálohu do `backups/<čas>/` pro `restore.sh`. Nastavení viz Zálohy. |
-| `scripts/check-offsite.sh` | Vždy (offline, zdarma): bez nastavení Drive se `offsite.sh` zastaví s větou, co doplnit; rclone dostane sdílený disk, klíč a heslo k šifře. S nastavením Drive v `.env` navíc nahraje skutečnou zálohu, stáhne ji zpět a porovná. |
-| `scripts/smoke.sh --paid` | Navíc ověří skutečné odpovědi modelů (1 malý placený požadavek na kontrolu). **Musí projít, než službu začne někdo používat.** |
+| `scripts/smoke.sh` | Ověří běžící stack přes porty, které používají lidé. |
+| `scripts/smoke.sh --paid` | Navíc 3 placené dotazy (Haiku, útrata, obrázek; dohromady pár centů). **Musí projít před předáním lidem.** |
+| `scripts/check-docs.sh` | Ověří `docs/` a README: odkazy, slovník názvů, žádná tajemství, úplné kroky průvodce. Potřebuje `node`, `gh` a běžící stack. |
+| `scripts/check-bootstrap-secrets.sh` | Bootstrap na čerstvém `.env` vygeneruje všechna hesla a bez `WEBUI_ADMIN_EMAIL` se zastaví. |
+| `scripts/check-first-admin.sh` | Dočasný Chat s prázdnou databází: správce z `.env` se přihlásí, registrace je zavřená. |
+| `scripts/backup.sh` | Záloha databází a souborů Chatu do `backups/<čas>/`, drží posledních 14. |
+| `scripts/restore.sh <adresář>` | Obnova ze zálohy; vše od zálohy se ztratí, aktuální stav se nejdřív uloží jako další záloha. |
+| `scripts/check-backup-restore.sh` | Záloha vrátí smazaný chat, soubor i útratu, poškozenou zálohu obnova odmítne. **Ne na serveru v provozu.** |
+| `scripts/offsite.sh upload \| list \| download <čas>` | Zašifrovaná kopie záloh na Google Drive, viz [Kopie mimo server](#kopie-mimo-server). |
+| `scripts/check-offsite.sh` | `offsite.sh` bez nastavení řekne, co doplnit; s nastavením Drive i cesta tam a zpět. |
+| `scripts/demo-staff.sh` | Ruční ukázka: dočasný účet běžného uživatele (modely, terminál, obrázky); po Enteru se smaže. |
+| `scripts/demo-over-budget.sh` | Ruční ukázka: dočasný účet přes rozpočet; po Enteru se smaže. |
 
 ## Adresy
 
 | Co | Kde |
 |---|---|
-| Open WebUI (přes Caddy) | `http://localhost` — jediný vstup; Open WebUI samo žádný port na hostu nemá |
-| LiteLLM admin UI (útrata, klíče) | `http://127.0.0.1:4000/ui`, uživatel `admin`, heslo `LITELLM_UI_PASSWORD` v `.env` |
+| Chat přes Vchod | `http://localhost` — jediný vstup; Chat sám žádný port na hostu nemá |
+| Brána (LiteLLM UI: útrata, klíče) | `http://127.0.0.1:4000/ui`, uživatel `admin`, heslo `LITELLM_UI_PASSWORD` v `.env` |
 
 ## Dokumenty
 
-- `docs/prehled.html` — z čeho je systém, pro netechnické lidi (otevři v prohlížeči). Názvy částí: Vchod, Chat, Brána, Databáze, Terminál, Poskytovatelé.
-- `docs/nasazeni.html` — průvodce nasazením na nový server krok za krokem (otevři v prohlížeči).
-- `docs/google-oauth-setup.md` — návod pro správce Google Workspace školy (OAuth klient pro přihlášení).
+- `docs/prehled.html` — z čeho je systém, pro netechnické lidi. Názvy částí: Vchod, Chat, Brána, Databáze, Terminál, Poskytovatelé.
+- `docs/nasazeni.html` — průvodce nasazením na nový server krok za krokem.
+- `docs/google-oauth-setup.md` — návod pro správce Google Workspace (přihlášení přes Google; připravuje se, issue #3).
 - `docs/adr/` — zaznamenaná rozhodnutí.
 
 ## Modely
 
 `claude-haiku`, `claude-sonnet`, `claude-opus`, `gemini-image` — mapování v `litellm/config.yaml`.
-Kdo který model vidí, jak se jmenuje a který je výchozí, je **konfigurace admina v UI** (Admin → Models).
-Bootstrap jen při prvním startu založí výchozí stav (`INITIAL_MODELS` v `scripts/bootstrap.sh`): Haiku
-(výchozí) a Sonnet pro všechny, Opus a Gemini jen pro admina. Existující nastavení nikdy nepřepíše.
-Bez záznamu by Open WebUI model ukázalo jen adminům. Tlačítko obrázku funguje s kterýmkoli chat modelem;
-`gemini-image` proto nemusí být ve výběru vidět.
+Kdo který model vidí, jak se jmenuje a který je výchozí, je **konfigurace správce v Chatu** (Administrace →
+Modely). Bootstrap jen poprvé založí výchozí stav (`INITIAL_MODELS` v `scripts/bootstrap.sh`): Haiku
+(výchozí) a Sonnet pro všechny, Opus a Gemini jen pro správce. Existující nastavení nikdy nepřepíše.
+Bez záznamu by Chat model ukázal jen správcům. Tlačítko obrázku funguje s kterýmkoli modelem, proto
+`gemini-image` nemusí být ve výběru vidět.
 
 ## Obrázky
 
-Tlačítko pro obrázek v chatu volá přes LiteLLM model `gemini-image` (`gemini/gemini-3.1-flash-image`,
-~$0.045 za obrázek). Gemini API musí běžet v placené úrovni (Google pak nepoužívá data k tréninku).
-Obrázky se počítají do stejných rozpočtů jako text. Kdo je přes rozpočet, uvidí u obrázku jen obecnou
-chybu „Unprocessable Content“ — Open WebUI důvod u obrázků neukazuje; důvod je v LiteLLM UI → Logs.
+Tlačítko pro obrázek volá přes Bránu model `gemini-image` (`gemini/gemini-3.1-flash-image`, ~$0.045 za
+obrázek). Gemini API musí běžet v placené úrovni (Google pak nepoužívá data k tréninku). Obrázky se
+počítají do stejných rozpočtů jako text. Kdo je přes rozpočet, uvidí u obrázku jen obecnou chybu
+„Unprocessable Content“ — Chat důvod u obrázků neukazuje; důvod je v LiteLLM UI → Logs.
 
 ## Rozpočty
 
-- **Na osobu:** $5 / 30 dní (`staff-monthly`, `scripts/lib.sh`). Open WebUI posílá e-mail přihlášeného,
-  LiteLLM podle něj počítá útratu. Kdo rozpočet vyčerpá, dostane v chatu českou hlášku s datem obnovy
-  (kód `rozpocet`). Útrata a rozpočty lidí: LiteLLM UI → *Customers*.
-- **Rozpočet školy:** klíč Open WebUI v LiteLLM má strop $100 / 30 dní; po vyčerpání hláška s kódem `rozpocet-skoly`.
-- **U poskytovatele:** měsíční limit workspace `openwebui` v console.anthropic.com.
+- **Na osobu:** $5 / 30 dní (`STAFF_BUDGET_USD` v `scripts/lib.sh`). Chat posílá e-mail přihlášeného, Brána
+  podle něj počítá útratu. Kdo rozpočet vyčerpá, dostane českou hlášku s datem obnovy (kód `rozpocet`).
+  Útrata lidí: LiteLLM UI → *Customers*.
+- **Rozpočet školy:** klíč Chatu v Bráně má strop $100 / 30 dní (`scripts/bootstrap.sh`); po vyčerpání hláška
+  s kódem `rozpocet-skoly`.
+- **U poskytovatelů:** měsíční limit workspace `openwebui` u Anthropicu a spend cap projektu u Googlu
+  (průvodce, krok Nastav stropy u poskytovatelů).
 
 ## Chybové hlášky
 
-Chyby z LiteLLM (Brány) vidí lidé česky; přeloží je `litellm/czech_errors.py`. Každá hláška končí
-kódem `(kód: …)`. Anglický originál zůstává v logu: `docker compose logs litellm` nebo LiteLLM UI → *Logs*.
+Chyby z Brány vidí lidé česky; přeloží je `litellm/czech_errors.py`. Každá hláška končí kódem `(kód: …)`.
+Anglický originál zůstává v logu: `docker compose logs litellm` nebo LiteLLM UI → *Logs*. U obrázků Chat
+hlášku neukazuje, viz [Obrázky](#obrázky).
 
 | Kód | Kdy |
 |---|---|
 | `rozpocet` | člověk vyčerpal osobní rozpočet |
-| `rozpocet-skoly` | došel rozpočet klíče Open WebUI (celé školy) |
+| `rozpocet-skoly` | došel rozpočet klíče Chatu (celé školy) |
 | `pretizeno` | poskytovatel je přetížený nebo omezuje počet dotazů |
 | `cas` | odpověď nepřišla včas |
 | `dlouha-konverzace` | konverzace je na model moc dlouhá |
@@ -87,21 +94,17 @@ kódem `(kód: …)`. Anglický originál zůstává v logu: `docker compose log
 | `nastaveni` | špatný klíč, chybí přístup nebo model není v `litellm/config.yaml` |
 | `jina` | cokoli jiného — důvod je v logu |
 
-U obrázků Open WebUI hlášku neukazuje (vidí jen „Unprocessable Content“), viz *Obrázky*.
+## Vchod (Caddy)
 
-## Vstup (Caddy)
-
-Lidé přicházejí jen přes Caddy (`caddy/Caddyfile`), který přidává bezpečnostní hlavičky a předává
-WebSockety (streamované odpovědi). Adresa je `WEBUI_URL` v `.env`; bootstrap ji zapíše i do Open WebUI
-(odkazy, přesměrování Google přihlášení). Na serveru se mění jen `.env`:
-`WEBUI_URL=https://ai.skolagaudi.cz` (Caddy si sám vyřídí certifikát Let's Encrypt) a
-`PUBLIC_BIND_ADDRESS=0.0.0.0`.
+Lidé přicházejí jen přes Vchod (`caddy/Caddyfile`), který přidává bezpečnostní hlavičky a předává
+WebSockety (streamované odpovědi). Adresa je `WEBUI_URL` v `.env`; bootstrap ji zapíše i do Chatu.
+Hodnoty pro server jsou v průvodci (krok Vyplň .env).
 
 ## Terminál
 
-`open-terminal` je shell na serveru. Bootstrap ho připojí do Open WebUI (adresa a klíč z `.env`); nové
-připojení nemá žádná pravidla přístupu, což Open WebUI chápe jako „jen admin“. Kdo další ho smí používat,
-je konfigurace admina v UI a bootstrap ji nepřepisuje. Co vidí běžný uživatel: `scripts/demo-staff.sh`.
+`open-terminal` je shell na serveru. Bootstrap ho připojí do Chatu (adresa a klíč z `.env`); nové připojení
+nemá žádná pravidla přístupu, což Chat chápe jako „jen správce“. Kdo další ho smí používat, je konfigurace
+správce v Chatu a bootstrap ji nepřepisuje. Co vidí běžný uživatel: `scripts/demo-staff.sh`.
 
 ## Nároky na server
 
@@ -111,12 +114,10 @@ Databáze 83 MB, Terminál 74 MB, Vchod 16 MB — dohromady asi 1,5 GB. Stropy v
 
 ## Zálohy
 
-`scripts/backup.sh` uloží dump databází `openwebui` a `litellm` a soubory Open WebUI (nahrané soubory,
-vektorový index; bez `cache/` se staženými modely) do `backups/<čas>/` (jen pro vlastníka, mimo git).
-Po dobu uložení databáze `openwebui` a souborů je Chat zastavený (dnes ~15 s, `backup.sh` vypíše
-`chat stopped for N s`), aby databáze a soubory byly ze stejné chvíle a index se nekopíroval během zápisu.
-`.env` v záloze není — kopie patří do správce hesel, obnova na jiném serveru ji potřebuje.
-Na serveru: denně z cronu ve 2:30 (krátký výpadek v noci) a kopie mimo server (krok nasazení).
+`scripts/backup.sh` uloží dump databází `openwebui` a `litellm` a soubory Chatu (nahrané soubory, vyhledávací
+index; bez `cache/`) do `backups/<čas>/` (jen pro vlastníka, mimo git). Chat se přitom asi na 15 s zastaví
+(`backup.sh` vypíše `chat stopped for N s`), aby databáze a soubory byly ze stejné chvíle. Na serveru běží
+každou noc ve 2:30 UTC z cronu. `.env` v záloze není — kopie patří do správce hesel.
 
 ### Kopie mimo server
 
@@ -125,14 +126,23 @@ disk školy na Google Drive; drží se posledních 30 záloh (při výpadcích t
 Zapisuje servisní účet, ne člověk ([ADR 0003](docs/adr/0003-zalohy-mimo-server.md)). V `.env`:
 `OFFSITE_DRIVE_ID` (ID sdíleného disku), `OFFSITE_SERVICE_ACCOUNT_FILE` (klíč robota, `secrets/`, mimo git)
 a `OFFSITE_ENCRYPTION_PASSWORD` (vygeneruje bootstrap). **Bez toho hesla se ze zálohy na Drive nic
-neobnoví** — patří do správce hesel spolu s celým `.env`. Bez nastavení se `offsite.sh` zastaví s větou,
-co doplnit; nikdy kopii tiše nepřeskočí.
+neobnoví** — patří do správce hesel spolu s celým `.env` a klíčem robota. Bez nastavení se `offsite.sh`
+zastaví s větou, co doplnit; nikdy kopii tiše nepřeskočí.
 
-Obnova z Google Drive (třeba na novém serveru: nejdřív kód, `.env` ze správce hesel, klíč robota do
-`secrets/` a `scripts/bootstrap.sh`):
+### Obnova z Google Drive
+
+Jen když server zmizel a chceš zpátky data (chaty, soubory, útratu). Čistý start bez dat je jiný postup:
+[Spuštění](#spuštění-lokálně) nebo průvodce — tam se bootstrap spouští hned a na zálohy nesahá.
+
+Na novém serveru: kód (průvodce, kroky do Stáhni kód na server), `.env` a klíč robota ze správce hesel
+(klíč do `secrets/drive-backup.json`). Bootstrap tu přijde až na konec, protože starý `.env` obsahuje
+klíče, které platí jen ve starých databázích, a ty vrátí až obnova:
 
 ```sh
+docker compose up -d --wait                   # prázdný stack se starými hesly
 scripts/offsite.sh list                       # vyber čas zálohy, např. 20261112T023000Z
 scripts/offsite.sh download 20261112T023000Z  # → backups/20261112T023000Z/
-scripts/restore.sh backups/20261112T023000Z
+scripts/restore.sh backups/20261112T023000Z   # databáze a soubory jsou zpět i se starými klíči
+scripts/bootstrap.sh                          # připojí Chat k Bráně a doplní, co chybí
+scripts/smoke.sh
 ```
