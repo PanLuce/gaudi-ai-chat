@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Smoke checks against the running stack, through the ports people actually use.
-# Usage: scripts/smoke.sh          free checks only
-#        scripts/smoke.sh --paid   also two checks that spend real provider credit (a short answer, one image)
+# Usage: scripts/smoke.sh   (free: nothing reaches a provider; a real answer is tried by hand, see the guide)
 # Exit code is non-zero on the first failing check.
 set -euo pipefail
 . "$(dirname "$0")/test-lib.sh"
@@ -231,50 +230,11 @@ run_free_checks() {
   check_provider_errors_are_czech
 }
 
-# LiteLLM writes spend asynchronously.
-has_spend() { awk -v s="$(customer_spend "$1")" 'BEGIN { exit !(s > 0) }'; }
-
-# Paid: a staff member gets a real answer from claude-haiku, charged to that person's e-mail.
-check_staff_member_gets_an_answer_and_pays() {
-  local email response answer
-  email=$(unique_smoke_email)
-  on_exit_cleanup delete_litellm_customer "$email"
-  create_temporary_staff_user "$email"
-  response=$(api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL/api/chat/completions" "$SMALL_CHAT") \
-    || fail "staff member's request failed: $(head -c 300 <<<"$response")"
-  answer=$(jq -r '.choices[0].message.content // empty' <<<"$response")
-  [ -n "$answer" ] || fail "claude-haiku returned no answer to a staff member"
-  retry_until 10 2 has_spend "$email" || fail "no spend recorded for $email"
-  pass "a staff member gets an answer from claude-haiku ($answer), charged $(customer_spend "$email") USD"
-}
-
-# Paid (~0.045 USD): a staff member gets a real image, charged to their budget.
-check_staff_member_gets_an_image() {
-  local email response spend
-  email=$(unique_smoke_email)
-  on_exit_cleanup delete_litellm_customer "$email"
-  create_temporary_staff_user "$email"
-  response=$(api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL/api/v1/images/generations" "$SMALL_IMAGE") \
-    || fail "image generation failed: $(head -c 300 <<<"$response")"
-  jq -e '.[0].url' <<<"$response" >/dev/null || fail "no image in response: $(head -c 300 <<<"$response")"
-  retry_until 10 2 has_spend "$email" || fail "image was not charged to $email"
-  pass "a staff member gets an image from $IMAGE_MODEL, charged $(customer_spend "$email") USD"
-}
-
-run_paid_checks() {
-  check_staff_member_gets_an_answer_and_pays
-  check_staff_member_gets_an_image
-}
-
 main() {
+  [ $# -eq 0 ] || fail "usage: scripts/smoke.sh (no options; a real answer and image are tried by hand, docs/nasazeni.html)"
   require_tools docker curl jq openssl
   load_env
   run_free_checks
-  case "${1:-}" in
-    --paid) run_paid_checks ;;
-    "") info "paid checks skipped (run with --paid once the provider account has credit)" ;;
-    *) fail "unknown option: $1" ;;
-  esac
 }
 
 main "$@"

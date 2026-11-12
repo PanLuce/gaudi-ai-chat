@@ -267,11 +267,11 @@ scripts/bootstrap.sh`,
       { label: "Open WebUI: proměnné prostředí (WEBUI_ADMIN_EMAIL)", url: "https://docs.openwebui.com/reference/env-configuration/#webui_admin_email" } ] },
 
   { phase: "Kontrola", title: "Ověř, že vše funguje", short: "Kontrola",
-    why: "Kontrolní seznam před odletem. Ověří každou část včetně skutečné odpovědi modelu a jednoho obrázku; stojí to pár centů.",
-    where: "Na serveru jako gaudi. Poskytovatelé musí mít kredit.",
+    why: "Kontrolní seznam před odletem. Skript ověří každou část zdarma, až k Bráně. Že poskytovatelé opravdu odpovídají, vyzkoušíš sám jednou zprávou a jedním obrázkem; stojí to pár centů.",
+    where: "Příkaz na serveru jako gaudi. Pak v prohlížeči na https://ai.skolagaudi.cz jako správce: napiš Claude Haiku „ahoj“ a tlačítkem obrázku nech nakreslit jablko. Poskytovatelé musí mít kredit.",
     command: `cd ~/openwebui-local
-scripts/smoke.sh --paid`,
-    see: "Samé ✓, žádné ✗. Když něco selže, řádek ✗ říká co.",
+scripts/smoke.sh`,
+    see: "Skript: samé ✓, žádné ✗ (když něco selže, řádek ✗ říká co). V prohlížeči: odpověď i obrázek. V Bráně (krok Podívej se do Brány → Customers) je u tvého e-mailu útrata v řádu centů.",
     guides: [
       { label: "LiteLLM: rozpočty uživatelů", url: "https://docs.litellm.ai/docs/proxy/users" } ] },
 

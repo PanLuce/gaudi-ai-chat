@@ -271,6 +271,13 @@ check_readme_restore_order() {
   pass "README.md: the restore from Google Drive runs bootstrap only after the databases are back"
 }
 
+# No check spends provider credit: a real answer and a real image are tried by hand in the guide.
+check_no_paid_checks() {
+  ! grep -n -- '--paid' "$REPO_ROOT/README.md" "$REPO_ROOT/docs/nasazeni.html" "$REPO_ROOT/scripts/smoke.sh" \
+    || fail "a document or smoke.sh still offers paid checks (--paid)"
+  pass "no check spends provider credit"
+}
+
 main() {
   require_tools curl gh grep node
   local page
@@ -289,6 +296,7 @@ main() {
   check_guide_offsite_copy
   check_guide_matches_the_stack
   check_readme_restore_order
+  check_no_paid_checks
 }
 
 main "$@"

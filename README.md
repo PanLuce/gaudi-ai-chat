@@ -19,13 +19,12 @@ v produkci; liší se jen hodnoty v `.env`. Nasazení na server: [docs/nasazeni.
 
 ## Skripty
 
-Podrobnosti jsou v hlavičce každého skriptu. Kontroly jsou zdarma, pokud není řečeno jinak.
+Podrobnosti jsou v hlavičce každého skriptu. Všechny kontroly jsou zdarma: žádná nevolá poskytovatele.
 
 | Skript | Co dělá |
 |---|---|
 | `scripts/bootstrap.sh` | Uvede stack do nakonfigurovaného stavu; lze spouštět opakovaně. |
-| `scripts/smoke.sh` | Ověří běžící stack přes porty, které používají lidé. |
-| `scripts/smoke.sh --paid` | Navíc 3 placené dotazy (Haiku, útrata, obrázek; dohromady pár centů). **Musí projít před předáním lidem.** |
+| `scripts/smoke.sh` | Ověří běžící stack přes porty, které používají lidé. Skutečnou odpověď a obrázek zkoušíš ručně (průvodce, krok Ověř, že vše funguje). |
 | `scripts/check-docs.sh` | Ověří `docs/` a README: odkazy, slovník názvů, žádná tajemství, úplné kroky průvodce. Potřebuje `node`, `gh` a běžící stack. |
 | `scripts/check-bootstrap-secrets.sh` | Bootstrap na čerstvém `.env` vygeneruje všechna hesla a bez `WEBUI_ADMIN_EMAIL` se zastaví. |
 | `scripts/check-first-admin.sh` | Dočasný Chat s prázdnou databází: správce z `.env` se přihlásí, registrace je zavřená. |
