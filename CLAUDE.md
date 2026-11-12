@@ -15,3 +15,4 @@ Open WebUI + LiteLLM + Postgres stack for Škola Gaudi staff. See README.md for 
 - Smoke checks that create data tag it `smoke-<timestamp>` and delete it in an EXIT trap.
 - Scripts read `.env`, which the Claude Code sandbox may not read, and `docker` needs the Docker socket: run scripts and docker commands outside the sandbox.
 - Never print or commit secrets; `.env` is git-ignored.
+- Claude creates feature branches itself (`git switch -c <name>`, run outside the sandbox) — no manual branch step for the user.
