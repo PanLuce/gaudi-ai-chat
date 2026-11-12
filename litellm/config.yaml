@@ -24,6 +24,8 @@ model_list:
       output_cost_per_image: 0.045
 
 litellm_settings:
+  # Czech messages for errors people see in Open WebUI (litellm/czech_errors.py).
+  callbacks: czech_errors.czech_errors
   # Budget every staff member gets unless set otherwise; created by scripts/bootstrap.sh.
   max_end_user_budget_id: staff-monthly
 

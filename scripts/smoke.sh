@@ -133,10 +133,10 @@ check_overspent_user_is_blocked_in_openwebui() {
   email=$(unique_smoke_email)
   create_temporary_staff_user "$email"
   create_temporary_customer "$email" 6
-  assert_blocked_by_budget /api/chat/completions "$SMALL_CHAT"
-  pass "a user over budget is blocked in Open WebUI"
+  assert_blocked_by_budget /api/chat/completions "$SMALL_CHAT" "$email"
+  pass "a user over budget is blocked in Open WebUI with a Czech message"
   # A custom "user" parameter (allowed in chat settings) must not move spend to another identity.
-  assert_blocked_by_budget /api/chat/completions "$(jq -c '.user = "someone-else@skolagaudi.cz"' <<<"$SMALL_CHAT")"
+  assert_blocked_by_budget /api/chat/completions "$(jq -c '.user = "someone-else@skolagaudi.cz"' <<<"$SMALL_CHAT")" "$email"
   pass "the budget cannot be dodged with a custom 'user' parameter"
   assert_image_blocked_by_budget "$email"
   pass "a user over budget cannot generate images either"
@@ -165,11 +165,22 @@ image_refused_for_budget() {
         and ((.metadata.error_information.error_message // "") | contains("ExceededBudget")))' >/dev/null
 }
 
+# "2026-12-01T00:00:00Z" -> "1. 12. 2026". Resets happen at midnight UTC, so the UTC day is the Prague day.
+staff_budget_reset_day() {
+  litellm_admin POST /budget/info "{\"budgets\":[\"$STAFF_BUDGET_ID\"]}" \
+    | jq -r '.[0].budget_reset_at[0:10] | split("-") | map(tonumber) | "\(.[2]). \(.[1]). \(.[0])"'
+}
+
+# The person sees a Czech message with a code for the admin, never their e-mail or LiteLLM internals.
 assert_blocked_by_budget() {
-  local path=$1 request=$2 response
+  local path=$1 request=$2 email=$3 response
   response=$(api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL$path" "$request" 2>/dev/null || true)
-  grep -q "ExceededBudget" <<<"$response" \
-    || fail "overspent user was not blocked by budget: $(head -c 300 <<<"$response")"
+  grep -q "Tvůj rozpočet na AI chat je vyčerpaný" <<<"$response" && grep -q "(kód: rozpocet)" <<<"$response" \
+    || fail "overspent user did not get the Czech budget message: $(head -c 300 <<<"$response")"
+  grep -qF "Rozpočet se obnoví $(staff_budget_reset_day)." <<<"$response" \
+    || fail "the budget message does not say when the budget resets ($(staff_budget_reset_day)): $(head -c 300 <<<"$response")"
+  ! grep -qE "$email|ExceededBudget" <<<"$response" \
+    || fail "the budget message shows the e-mail or LiteLLM internals: $(head -c 300 <<<"$response")"
 }
 
 check_haiku_answers_in_openwebui() {
