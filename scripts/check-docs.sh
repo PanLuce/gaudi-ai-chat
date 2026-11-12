@@ -162,7 +162,8 @@ if (!data) { console.error("✗ no <script id=\"overview-data\"> with the parts"
 const overview = {};
 vm.runInNewContext(data[1] + `
 this.PARTS = typeof PARTS === "undefined" ? null : PARTS;
-this.TRIP = typeof TRIP === "undefined" ? null : TRIP;`, overview);
+this.TRIP = typeof TRIP === "undefined" ? null : TRIP;
+this.ICONS = typeof ICONS === "undefined" ? {} : ICONS;`, overview);
 if (!overview.PARTS || !overview.TRIP) { console.error("✗ overview-data defines no PARTS or no TRIP"); process.exit(1); }'
 
 # Reads the check's JS from stdin and runs it after the overview loader; fails with $1 when it exits non-zero.
@@ -181,7 +182,9 @@ overview.TRIP.forEach((step, index) => {
   const label = `trip step ${index + 1}`;
   step.parts.filter((id) => !ids.has(id)).forEach((id) => report(`${label}: no part "${id}"`));
   // The caption sits under the picture on one line on a desktop.
-  if (step.text.length > 60) report(`${label}: text has ${step.text.length} characters, at most 60`);
+  if (step.text.length > 80) report(`${label}: text has ${step.text.length} characters, at most 80`);
+  // One concrete trip: every step follows the same person and their question.
+  if (!/Frant/.test(step.text)) report(`${label}: does not follow Franta's question ("${step.text}")`);
   // The question travels along the picture; a step lights up the next part on the path (backstage parts may join).
   const onPath = step.parts.map((id) => pathOrder.indexOf(id)).filter((position) => position >= 0);
   const furthest = Math.max(...onPath);
@@ -190,9 +193,12 @@ overview.TRIP.forEach((step, index) => {
   lastPathIndex = Math.max(lastPathIndex, furthest);
 });
 if (lastPathIndex !== pathOrder.length - 1) report("the trip does not reach the last part on the path");
+// Every part shows a picture of where it happens, on the map and in the trip bar.
+overview.PARTS.filter((part) => !/<svg[\s\S]*<\/svg>/.test(overview.ICONS[part.id] || ""))
+  .forEach((part) => report(`part "${part.id}" has no icon in ICONS`));
 process.exit(failed ? 1 : 0);
 JS
-  pass "docs/prehled.html: the query trip follows the picture, one short line per step"
+  pass "docs/prehled.html: the query trip follows Franta's question across the picture, one line and one icon per step"
 }
 
 main() {
