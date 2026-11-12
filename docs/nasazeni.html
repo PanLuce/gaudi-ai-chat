@@ -150,7 +150,7 @@ cat ~/.ssh/id_ed25519.pub`,
       { label: "Hetzner: Creating a Firewall", url: "https://docs.hetzner.com/cloud/firewalls/getting-started/creating-a-firewall" } ] },
 
   { phase: "Server", title: "Založ server", short: "Server",
-    why: "Teď si pronajmeš samotný počítač. Stačí malý: celý systém potřebuje asi 1,5 GB paměti, 8 GB dává pohodlnou rezervu.",
+    why: "Teď si pronajmeš samotný počítač. Stačí malý: celý systém potřebuje asi 1,5 GB paměti (naměřeno, viz README), 8 GB dává pohodlnou rezervu.",
     where: "Cloud Console → Servers → Add Server: lokace v Německu (Falkenstein nebo Nuremberg), image Ubuntu 24.04, typ se sdíleným CPU a 8 GB RAM, SSH key z kroku výše, firewall gaudi-ai, název gaudi-ai.",
     see: "Server gaudi-ai běží a má veřejnou IPv4 adresu. Zapiš si ji, budeš ji potřebovat ve dvou dalších krocích.",
     guides: [
@@ -195,7 +195,7 @@ docker compose version`,
       { label: "Docker: Install Docker Engine on Ubuntu", url: "https://docs.docker.com/engine/install/ubuntu/" } ] },
 
   { phase: "Příprava serveru", title: "Založ uživatele gaudi", short: "Uživatel gaudi",
-    why: "Na serveru nebudeš běžně pracovat jako root (správce všeho). Uživatel gaudi smí jen spouštět kontejnery, nic víc.",
+    why: "Na serveru nebudeš běžně pracovat jako root (správce všeho). Pozor: kdo smí ovládat Docker, má přes něj prakticky stejná práva jako root. Uživatel gaudi je oddělený hlavně proto, aby běžná práce nešla přes root a překlep v příkazu nerozbil systém.",
     where: "Na serveru jako root: ssh gaudi-ai-root.",
     command: `adduser --disabled-password --gecos "" gaudi
 usermod -aG docker gaudi
@@ -231,9 +231,11 @@ ls ~/openwebui-local/scripts`,
     command: `cd ~/openwebui-local
 cp .env.example .env && chmod 600 .env
 sed -i -e "s|^LITELLM_MASTER_KEY=.*|LITELLM_MASTER_KEY=sk-$(openssl rand -hex 24)|" -e "s|^OPEN_TERMINAL_API_KEY=.*|OPEN_TERMINAL_API_KEY=$(openssl rand -hex 24)|" -e "s|^WEBUI_URL=.*|WEBUI_URL=https://ai.skolagaudi.cz|" -e "s|^PUBLIC_BIND_ADDRESS=.*|PUBLIC_BIND_ADDRESS=0.0.0.0|" .env
+read -r -p "Tvůj školní e-mail (správce Chatu): " ADMIN_EMAIL
+sed -i '/^WEBUI_ADMIN_EMAIL=/d' .env && printf 'WEBUI_ADMIN_EMAIL=%s\n' "$ADMIN_EMAIL" >> .env
 nano .env
-grep -cE '^ANTHROPIC_API_KEY=sk-ant-api|^GEMINI_API_KEY=AIza' .env`,
-    see: "Poslední příkaz vypíše 2: oba klíče poskytovatelů jsou vyplněné. Žádná hodnota se neukáže.",
+grep -cE '^ANTHROPIC_API_KEY=sk-ant-api|^GEMINI_API_KEY=AIza|^WEBUI_ADMIN_EMAIL=.+@' .env`,
+    see: "Poslední příkaz vypíše 3: oba klíče poskytovatelů a tvůj e-mail správce jsou vyplněné. Žádná hodnota se neukáže.",
     guides: [
       { label: "Anthropic Console: workspaces", url: "https://console.anthropic.com/settings/workspaces" },
       { label: "Google AI Studio: API keys", url: "https://aistudio.google.com/apikey" } ] },
@@ -243,20 +245,22 @@ grep -cE '^ANTHROPIC_API_KEY=sk-ant-api|^GEMINI_API_KEY=AIza' .env`,
     where: "Na serveru jako gaudi.",
     command: `cd ~/openwebui-local
 scripts/bootstrap.sh
-curl -sI https://ai.skolagaudi.cz/health | head -1`,
-    see: "„✓ bootstrap done“ a poslední řádek HTTP/2 200. Bootstrap napíše, že přeskočil kroky správce, protože ještě není admin.",
+curl --retry 10 --retry-delay 6 --retry-all-errors -sI https://ai.skolagaudi.cz/health | head -1`,
+    see: "„✓ bootstrap done“ a poslední řádek HTTP/2 200. Vchod si při prvním spuštění vyřizuje HTTPS certifikát několik desítek sekund; poslední příkaz to zkouší až minutu. Bootstrap napíše, že přeskočil kroky správce, protože ještě není admin.",
     guides: [
       { label: "Caddy: automatické HTTPS", url: "https://caddyserver.com/docs/automatic-https" } ] },
 
-  { phase: "Spuštění", title: "Založ první účet (správce)", short: "První účet", manual: true,
-    why: "První účet, který se zaregistruje, je správce. Udělej to hned, ať ho nezaloží nikdo jiný.",
-    where: "V prohlížeči na https://ai.skolagaudi.cz → zaregistruj se. Pak Nastavení → Účet → API klíče → Vytvořit nový klíč. Na serveru ho vlož do .env za OPENWEBUI_ADMIN_API_KEY= a spusť bootstrap znovu.",
-    command: `cd ~/openwebui-local
+  { phase: "Spuštění", title: "Přihlas se jako správce", short: "Správce", manual: true,
+    why: "Účet správce Chatu založil systém sám při prvním startu z tvého e-mailu a hesla v .env, takže ho nikdo jiný nepředběhne a registrace je zavřená. Pozor, hesla jsou tři různá: správce Chatu (tady), Brána (krok Podívej se do Brány) a root na serveru (jen SSH klíč).",
+    where: "V terminálu na svém počítači, sám (ne přes Claude): první příkaz ukáže heslo správce Chatu jen tobě. V prohlížeči na https://ai.skolagaudi.cz se přihlas svým e-mailem a tímto heslem. Pak Nastavení → Účet → API klíče → Vytvořit nový klíč. Na serveru ho vlož do .env za OPENWEBUI_ADMIN_API_KEY= a spusť bootstrap znovu.",
+    command: `ssh gaudi-ai "grep '^WEBUI_ADMIN_PASSWORD=' openwebui-local/.env | cut -d= -f2-"
+ssh gaudi-ai
+cd ~/openwebui-local
 nano .env
 scripts/bootstrap.sh`,
-    see: "Bootstrap tentokrát hlásí „Open WebUI connection points at LiteLLM“ a založení modelů. V Chatu vidíš Claude Haiku jako výchozí model.",
+    see: "Přihlášení projde a vpravo dole jsi správce. Bootstrap tentokrát hlásí „Open WebUI connection points at LiteLLM“ a založení modelů. V Chatu vidíš Claude Haiku jako výchozí model.",
     guides: [
-      { label: "Open WebUI: dokumentace", url: "https://docs.openwebui.com/" } ] },
+      { label: "Open WebUI: proměnné prostředí (WEBUI_ADMIN_EMAIL)", url: "https://docs.openwebui.com/reference/env-configuration/#webui_admin_email" } ] },
 
   { phase: "Kontrola", title: "Ověř, že vše funguje", short: "Kontrola",
     why: "Kontrolní seznam před odletem. Ověří každou část včetně skutečné odpovědi modelu a jednoho obrázku; stojí to pár centů.",
@@ -267,20 +271,21 @@ scripts/smoke.sh --paid`,
     guides: [
       { label: "LiteLLM: rozpočty uživatelů", url: "https://docs.litellm.ai/docs/proxy/users" } ] },
 
-  { phase: "Kontrola", title: "Podívej se do Brány", short: "Brána",
+  { phase: "Kontrola", title: "Podívej se do Brány", short: "Brána", manual: true,
     why: "Brána na internet nevidí. Podíváš se do ní tunelem: tvůj počítač si na chvíli půjčí její okénko.",
-    where: "V terminálu na svém počítači; dokud tunel běží, otevři v prohlížeči http://127.0.0.1:4000/ui (uživatel admin, heslo LITELLM_UI_PASSWORD z .env na serveru).",
-    command: `ssh -N -L 4000:127.0.0.1:4000 gaudi-ai`,
+    where: "V terminálu na svém počítači, sám (ne přes Claude). První příkaz ukáže heslo do Brány jen tobě; druhý otevře tunel. Dokud tunel běží, otevři v prohlížeči http://127.0.0.1:4000/ui (uživatel admin, heslo z prvního příkazu).",
+    command: `ssh gaudi-ai "grep '^LITELLM_UI_PASSWORD=' openwebui-local/.env | cut -d= -f2-"
+ssh -N -L 4000:127.0.0.1:4000 gaudi-ai`,
     see: "Přihlašovací stránka LiteLLM. V sekci Customers je útrata podle e-mailů. Tunel zavřeš Ctrl+C.",
     guides: [
       { label: "ssh: volba -L (tunel)", url: "https://man.openbsd.org/ssh" } ] },
 
   { phase: "Zálohy", title: "Zapni noční zálohu", short: "Noční záloha",
     why: "Záloha je fotka všech dat. Každou noc se udělá nová a drží se posledních 14. Chat se na ni na pár sekund zastaví, proto ve 2:30.",
-    where: "Na serveru jako gaudi. V crontab -e přidej na konec řádek ze druhého příkazu.",
+    where: "Na serveru jako gaudi. Druhý příkaz přidá noční zálohu do crontabu; když tam už je, nepřidá ji podruhé.",
     command: `cd ~/openwebui-local && mkdir -p backups && scripts/backup.sh
-echo '30 2 * * * cd /home/gaudi/openwebui-local && scripts/backup.sh >> backups/backup.log 2>&1'
-crontab -e`,
+line='30 2 * * * cd /home/gaudi/openwebui-local && scripts/backup.sh >> backups/backup.log 2>&1'; crontab -l 2>/dev/null | grep -qxF "$line" || (crontab -l 2>/dev/null; echo "$line") | crontab -
+crontab -l`,
     see: "První příkaz končí „✓ backup complete“ a cestou ke složce. crontab -l ukáže nový řádek.",
     guides: [
       { label: "crontab: formát řádku", url: "https://manpages.ubuntu.com/manpages/noble/en/man5/crontab.5.html" } ] },

@@ -5,9 +5,11 @@ stejná sestava jako v produkci; liší se jen hodnoty v `.env`.
 
 ## Spuštění
 
-1. `cp .env.example .env` a vyplň `LITELLM_MASTER_KEY`, `OPEN_TERMINAL_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`.
-2. `scripts/bootstrap.sh` — vygeneruje chybějící hesla, spustí stack, založí klíč Open WebUI v LiteLLM.
-3. Otevři `http://localhost`, zaregistruj se (první účet je admin). Rozhraní je česky; pokud
+1. `cp .env.example .env` a vyplň `LITELLM_MASTER_KEY`, `OPEN_TERMINAL_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`
+   a `WEBUI_ADMIN_EMAIL` (tvůj e-mail = účet správce Chatu).
+2. `scripts/bootstrap.sh` — vygeneruje chybějící hesla (i `WEBUI_ADMIN_PASSWORD`), spustí stack, založí klíč Open WebUI
+   v LiteLLM. Chat při prvním startu s prázdnou databází založí správce z `.env` a zavře registraci.
+3. Otevři `http://localhost`, přihlas se jako správce (heslo `WEBUI_ADMIN_PASSWORD` v `.env`). Rozhraní je česky; pokud
    prohlížeč pamatuje jiný jazyk z dřívějška, přepni ho v Nastavení → Obecné → Jazyk.
 4. **Admin API key:** Nastavení → Účet → API klíče → vytvořit, uložit do `.env` jako
    `OPENWEBUI_ADMIN_API_KEY`. Nová databáze = nový klíč.
@@ -21,7 +23,8 @@ stejná sestava jako v produkci; liší se jen hodnoty v `.env`.
 | `scripts/smoke.sh` | Ověří běžící stack přes porty, které používají lidé. Zdarma. |
 | `scripts/demo-staff.sh` | Ruční ukázka: dočasný účet běžného uživatele — co vidí zaměstnanec (modely, terminál, obrázky); po Enteru se smaže. Zdarma. |
 | `scripts/demo-over-budget.sh` | Ruční ukázka: dočasný účet přes rozpočet, vyzkoušíš v prohlížeči, po Enteru se smaže. Zdarma. |
-| `scripts/check-bootstrap-secrets.sh` | Ověří, že bootstrap na čerstvém `.env` z `.env.example` vygeneruje všechna hesla. Skutečný `.env` nemění. |
+| `scripts/check-bootstrap-secrets.sh` | Ověří, že bootstrap na čerstvém `.env` z `.env.example` vygeneruje všechna hesla a bez `WEBUI_ADMIN_EMAIL` se zastaví. Skutečný `.env` nemění. |
+| `scripts/check-first-admin.sh` | Spustí dočasný Chat s prázdnou databází: správce z `.env` se přihlásí, registrace je zavřená. Běžícího stacku se nedotkne. Zdarma. |
 | `scripts/check-docs.sh` | Ověří stránky v `docs/`: odkazy odpovídají, jeden slovník názvů, žádná tajemství a každý krok průvodce má úplný prompt pro Claude Code (potřebuje `node`). Zdarma. |
 | `scripts/backup.sh` | Záloha obou databází a souborů Open WebUI do `backups/<čas>/`, drží posledních 14. |
 | `scripts/restore.sh <adresář>` | Obnova ze zálohy; vše od zálohy se ztratí (ptá se, `--yes` bez ptaní). Nejdřív celou zálohu přečte nanečisto — poškozenou odmítne a nic nezmění — a uloží aktuální stav jako další zálohu, takže jde vrátit i obnova. |
@@ -97,6 +100,12 @@ WebSockety (streamované odpovědi). Adresa je `WEBUI_URL` v `.env`; bootstrap j
 `open-terminal` je shell na serveru. Bootstrap ho připojí do Open WebUI (adresa a klíč z `.env`); nové
 připojení nemá žádná pravidla přístupu, což Open WebUI chápe jako „jen admin“. Kdo další ho smí používat,
 je konfigurace admina v UI a bootstrap ji nepřepisuje. Co vidí běžný uživatel: `scripts/demo-staff.sh`.
+
+## Nároky na server
+
+Naměřeno 12. 11. 2026 na běžícím stacku (`docker stats --no-stream`): Chat 712 MB, Brána 611 MB,
+Databáze 83 MB, Terminál 74 MB, Vchod 16 MB — dohromady asi 1,5 GB. Stropy v `docker-compose.yml`
+(`mem_limit`) dávají 4,3 GB, proto server s 8 GB RAM. Měř znovu po větší změně nebo upgradu.
 
 ## Zálohy
 

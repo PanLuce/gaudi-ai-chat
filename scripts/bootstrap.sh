@@ -46,6 +46,13 @@ ensure_secrets() {
   ensure_secret LITELLM_UI_PASSWORD
   ensure_secret OPENWEBUI_DB_PASSWORD
   ensure_secret WEBUI_SECRET_KEY
+  ensure_secret WEBUI_ADMIN_PASSWORD
+}
+
+# The admin account is created from .env on Chat's first start, so the e-mail must be there before it.
+require_admin_email() {
+  grep -q '^WEBUI_ADMIN_EMAIL=..*@' "$ENV_FILE" \
+    || fail "add WEBUI_ADMIN_EMAIL=<your school e-mail> to .env (the Chat admin account), then run bootstrap again"
 }
 
 openwebui_key_is_valid() {
@@ -167,6 +174,7 @@ main() {
   require_tools docker curl jq openssl
   load_env
   ensure_secrets
+  require_admin_email
   load_env
   compose up -d --wait
   ensure_openwebui_litellm_key
