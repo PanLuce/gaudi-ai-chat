@@ -22,6 +22,7 @@ stejná sestava jako v produkci; liší se jen hodnoty v `.env`.
 | `scripts/demo-staff.sh` | Ruční ukázka: dočasný účet běžného uživatele — co vidí zaměstnanec (modely, terminál, obrázky); po Enteru se smaže. Zdarma. |
 | `scripts/demo-over-budget.sh` | Ruční ukázka: dočasný účet přes rozpočet, vyzkoušíš v prohlížeči, po Enteru se smaže. Zdarma. |
 | `scripts/check-bootstrap-secrets.sh` | Ověří, že bootstrap na čerstvém `.env` z `.env.example` vygeneruje všechna hesla. Skutečný `.env` nemění. |
+| `scripts/check-docs.sh` | Ověří stránky v `docs/`: odkazy odpovídají, jeden slovník názvů, žádná tajemství a každý krok průvodce má úplný prompt pro Claude Code (potřebuje `node`). Zdarma. |
 | `scripts/backup.sh` | Záloha obou databází a souborů Open WebUI do `backups/<čas>/`, drží posledních 14. |
 | `scripts/restore.sh <adresář>` | Obnova ze zálohy; vše od zálohy se ztratí (ptá se, `--yes` bez ptaní). Nejdřív celou zálohu přečte nanečisto — poškozenou odmítne a nic nezmění — a uloží aktuální stav jako další zálohu, takže jde vrátit i obnova. |
 | `scripts/check-backup-restore.sh` | Ověří, že záloha vrátí smazaný chat, soubor i útratu a že poškozenou zálohu obnova odmítne. **Ne na serveru v provozu** — obnova vrací databáze do okamžiku zálohy. Zdarma. |
@@ -36,6 +37,8 @@ stejná sestava jako v produkci; liší se jen hodnoty v `.env`.
 
 ## Dokumenty
 
+- `docs/prehled.html` — z čeho je systém, pro netechnické lidi (otevři v prohlížeči). Názvy částí: Vchod, Chat, Brána, Databáze, Terminál, Poskytovatelé.
+- `docs/nasazeni.html` — průvodce nasazením na nový server krok za krokem (otevři v prohlížeči).
 - `docs/google-oauth-setup.md` — návod pro správce Google Workspace školy (OAuth klient pro přihlášení).
 - `docs/adr/` — zaznamenaná rozhodnutí.
 
