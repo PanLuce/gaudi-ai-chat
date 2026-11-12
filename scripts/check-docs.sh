@@ -5,7 +5,7 @@
 set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
-readonly PAGES="prehled.html"
+readonly PAGES="prehled.html nasazeni.html"
 # One word for each part, the same on every page and in the README.
 readonly VOCABULARY="Vchod Chat Brána Databáze Terminál Poskytovatelé"
 # Exists only after deployment.

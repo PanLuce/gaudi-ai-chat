@@ -38,6 +38,7 @@ stejná sestava jako v produkci; liší se jen hodnoty v `.env`.
 ## Dokumenty
 
 - `docs/prehled.html` — z čeho je systém, pro netechnické lidi (otevři v prohlížeči). Názvy částí: Vchod, Chat, Brána, Databáze, Terminál, Poskytovatelé.
+- `docs/nasazeni.html` — průvodce nasazením na nový server krok za krokem (otevři v prohlížeči).
 - `docs/google-oauth-setup.md` — návod pro správce Google Workspace školy (OAuth klient pro přihlášení).
 - `docs/adr/` — zaznamenaná rozhodnutí.
 
