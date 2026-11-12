@@ -8,6 +8,7 @@ set -euo pipefail
 # only scripts need (compose leaves the admin password optional; the backup password is for offsite.sh).
 GENERATED_SECRETS="$(grep -oE '\$\{[A-Z_]+:\?run scripts/bootstrap.sh\}' "$REPO_ROOT/docker-compose.yml" \
   | sed -E 's/^\$\{([A-Z_]+):.*/\1/' | sort -u | xargs) WEBUI_ADMIN_PASSWORD OFFSITE_ENCRYPTION_PASSWORD"
+[ "$(wc -w <<<"$GENERATED_SECRETS")" -gt 2 ] || { echo "✗ found no ':?run scripts/bootstrap.sh' secrets in docker-compose.yml" >&2; exit 1; }
 readonly GENERATED_SECRETS
 
 main_check() {

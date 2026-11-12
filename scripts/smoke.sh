@@ -50,8 +50,9 @@ check_websocket_passes_through_caddy() {
 # Only Caddy opens ports to the outside; the LiteLLM admin UI is published on this machine only (SSH tunnel).
 check_only_caddy_is_published() {
   local exposed
-  exposed=$(compose ps --format json | jq -rs '[.[] | .Service as $s | .Publishers[]? | select(.PublishedPort > 0)
-      | select($s != "caddy" and ($s != "litellm" or .URL != "127.0.0.1")) | "\($s) \(.URL):\(.PublishedPort)"] | join(", ")')
+  exposed=$(compose ps --format json | jq -rs '[.[] | (if type == "array" then .[] else . end) | .Service as $s | .Publishers[]? | select(.PublishedPort > 0)
+      | select($s != "caddy" and ($s != "litellm" or .URL != "127.0.0.1")) | "\($s) \(.URL):\(.PublishedPort)"] | join(", ")') \
+    || fail "could not read the published ports from docker compose ps"
   [ -z "$exposed" ] || fail "published past Caddy: $exposed"
   pass "only Caddy is reachable from outside; LiteLLM listens on 127.0.0.1 only"
 }

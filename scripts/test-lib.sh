@@ -23,7 +23,14 @@ customer_spend() {
   litellm_admin GET "/customer/info?end_user_id=$1" 2>/dev/null | jq -r '.spend // empty' || true
 }
 
-customer_exists() { litellm_admin GET "/customer/info?end_user_id=$1" >/dev/null 2>&1; }
+# 404 is the only "no": LiteLLM being down must not look like a successful delete.
+customer_exists() {
+  local status
+  status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+    --config <(printf 'header = "Authorization: Bearer %s"\n' "$LITELLM_MASTER_KEY") \
+    "$LITELLM_URL/customer/info?end_user_id=$(jq -rn --arg e "$1" '$e | @uri')" || true)
+  [ "$status" != 404 ]
+}
 
 # LiteLLM writes request logs asynchronously and re-creates the customer row when it does, so delete,
 # wait for pending writes, delete again and check. Still there after 3 rounds: the run reports
