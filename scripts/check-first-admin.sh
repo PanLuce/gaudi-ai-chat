@@ -30,6 +30,8 @@ start_fresh_chat() {
   on_exit_cleanup rm -f "$env_file"
   chat_admin_env > "$env_file" || fail "docker-compose.yml does not pass the admin settings to Chat"
   printf 'WEBUI_SECRET_KEY=%s\n' "$(openssl rand -hex 24)" >> "$env_file"
+  # A fresh Chat downloads its search model first (minutes, at HuggingFace's pace); sign-in needs none of it.
+  printf 'OFFLINE_MODE=true\nHF_HUB_OFFLINE=1\n' >> "$env_file"
   on_exit_cleanup remove_container "$TAG"
   docker run -d --name "$TAG" --env-file "$env_file" -p 127.0.0.1::8080 "$image" >/dev/null \
     || fail "could not start a throwaway Chat from $image"
