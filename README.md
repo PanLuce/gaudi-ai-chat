@@ -131,9 +131,12 @@ zastaví s větou, co doplnit; nikdy kopii tiše nepřeskočí.
 
 ### Obnova z Google Drive
 
+Jen když server zmizel a chceš zpátky data (chaty, soubory, útratu). Čistý start bez dat je jiný postup:
+[Spuštění](#spuštění-lokálně) nebo průvodce — tam se bootstrap spouští hned a na zálohy nesahá.
+
 Na novém serveru: kód (průvodce, kroky do Stáhni kód na server), `.env` a klíč robota ze správce hesel
-(klíč do `secrets/drive-backup.json`). Starý `.env` obsahuje klíče, které platí jen ve starých databázích,
-proto se bootstrap spustí až po obnově:
+(klíč do `secrets/drive-backup.json`). Bootstrap tu přijde až na konec, protože starý `.env` obsahuje
+klíče, které platí jen ve starých databázích, a ty vrátí až obnova:
 
 ```sh
 docker compose up -d --wait                   # prázdný stack se starými hesly
