@@ -276,7 +276,7 @@ scripts/smoke.sh --paid`,
       { label: "ssh: volba -L (tunel)", url: "https://man.openbsd.org/ssh" } ] },
 
   { phase: "Zálohy", title: "Zapni noční zálohu", short: "Noční záloha",
-    why: "Záloha je fotka všech dat. Každou noc se udělá nová a drží se posledních 14.",
+    why: "Záloha je fotka všech dat. Každou noc se udělá nová a drží se posledních 14. Chat se na ni na pár sekund zastaví, proto ve 2:30.",
     where: "Na serveru jako gaudi. V crontab -e přidej na konec řádek ze druhého příkazu.",
     command: `cd ~/openwebui-local && mkdir -p backups && scripts/backup.sh
 echo '30 2 * * * cd /home/gaudi/openwebui-local && scripts/backup.sh >> backups/backup.log 2>&1'
