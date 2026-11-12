@@ -121,7 +121,7 @@ footer { color: var(--muted); font-size: 14px; display: grid; gap: 6px; }
   </footer>
 </div>
 
-<script>
+<script id="overview-data">
 // One record per part; the picture, the bubbles and the card all come from here.
 const PARTS = [
   { id: "zamestnanec", name: "Zaměstnanec", tech: "prohlížeč", kind: "person", place: "path",
@@ -162,7 +162,9 @@ const PARTS = [
     laik: "Nástroj pro správce: příkazová řádka serveru přímo v Chatu. Běžní zaměstnanci ho ve výchozím stavu nevidí.",
     links: [ { when: "adresa", url: null, note: "žádná vlastní, otevírá se v Chatu" } ] },
 ];
+</script>
 
+<script>
 const path = document.getElementById("path");
 const backstage = document.getElementById("backstage");
 const card = document.getElementById("card");
