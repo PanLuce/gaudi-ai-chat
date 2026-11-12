@@ -150,7 +150,7 @@ cat ~/.ssh/id_ed25519.pub`,
       { label: "Hetzner: Creating a Firewall", url: "https://docs.hetzner.com/cloud/firewalls/getting-started/creating-a-firewall" } ] },
 
   { phase: "Server", title: "Založ server", short: "Server",
-    why: "Teď si pronajmeš samotný počítač. Stačí malý: celý systém potřebuje asi 1,5 GB paměti, 8 GB dává pohodlnou rezervu.",
+    why: "Teď si pronajmeš samotný počítač. Stačí malý: celý systém potřebuje asi 1,5 GB paměti (naměřeno, viz README), 8 GB dává pohodlnou rezervu.",
     where: "Cloud Console → Servers → Add Server: lokace v Německu (Falkenstein nebo Nuremberg), image Ubuntu 24.04, typ se sdíleným CPU a 8 GB RAM, SSH key z kroku výše, firewall gaudi-ai, název gaudi-ai.",
     see: "Server gaudi-ai běží a má veřejnou IPv4 adresu. Zapiš si ji, budeš ji potřebovat ve dvou dalších krocích.",
     guides: [
@@ -195,7 +195,7 @@ docker compose version`,
       { label: "Docker: Install Docker Engine on Ubuntu", url: "https://docs.docker.com/engine/install/ubuntu/" } ] },
 
   { phase: "Příprava serveru", title: "Založ uživatele gaudi", short: "Uživatel gaudi",
-    why: "Na serveru nebudeš běžně pracovat jako root (správce všeho). Uživatel gaudi smí jen spouštět kontejnery, nic víc.",
+    why: "Na serveru nebudeš běžně pracovat jako root (správce všeho). Pozor: kdo smí ovládat Docker, má přes něj prakticky stejná práva jako root. Uživatel gaudi je oddělený hlavně proto, aby běžná práce nešla přes root a překlep v příkazu nerozbil systém.",
     where: "Na serveru jako root: ssh gaudi-ai-root.",
     command: `adduser --disabled-password --gecos "" gaudi
 usermod -aG docker gaudi
@@ -243,8 +243,8 @@ grep -cE '^ANTHROPIC_API_KEY=sk-ant-api|^GEMINI_API_KEY=AIza' .env`,
     where: "Na serveru jako gaudi.",
     command: `cd ~/openwebui-local
 scripts/bootstrap.sh
-curl -sI https://ai.skolagaudi.cz/health | head -1`,
-    see: "„✓ bootstrap done“ a poslední řádek HTTP/2 200. Bootstrap napíše, že přeskočil kroky správce, protože ještě není admin.",
+curl --retry 10 --retry-delay 6 --retry-all-errors -sI https://ai.skolagaudi.cz/health | head -1`,
+    see: "„✓ bootstrap done“ a poslední řádek HTTP/2 200. Vchod si při prvním spuštění vyřizuje HTTPS certifikát několik desítek sekund; poslední příkaz to zkouší až minutu. Bootstrap napíše, že přeskočil kroky správce, protože ještě není admin.",
     guides: [
       { label: "Caddy: automatické HTTPS", url: "https://caddyserver.com/docs/automatic-https" } ] },
 
@@ -267,20 +267,21 @@ scripts/smoke.sh --paid`,
     guides: [
       { label: "LiteLLM: rozpočty uživatelů", url: "https://docs.litellm.ai/docs/proxy/users" } ] },
 
-  { phase: "Kontrola", title: "Podívej se do Brány", short: "Brána",
+  { phase: "Kontrola", title: "Podívej se do Brány", short: "Brána", manual: true,
     why: "Brána na internet nevidí. Podíváš se do ní tunelem: tvůj počítač si na chvíli půjčí její okénko.",
-    where: "V terminálu na svém počítači; dokud tunel běží, otevři v prohlížeči http://127.0.0.1:4000/ui (uživatel admin, heslo LITELLM_UI_PASSWORD z .env na serveru).",
-    command: `ssh -N -L 4000:127.0.0.1:4000 gaudi-ai`,
+    where: "V terminálu na svém počítači, sám (ne přes Claude). První příkaz ukáže heslo do Brány jen tobě; druhý otevře tunel. Dokud tunel běží, otevři v prohlížeči http://127.0.0.1:4000/ui (uživatel admin, heslo z prvního příkazu).",
+    command: `ssh gaudi-ai "grep '^LITELLM_UI_PASSWORD=' openwebui-local/.env | cut -d= -f2-"
+ssh -N -L 4000:127.0.0.1:4000 gaudi-ai`,
     see: "Přihlašovací stránka LiteLLM. V sekci Customers je útrata podle e-mailů. Tunel zavřeš Ctrl+C.",
     guides: [
       { label: "ssh: volba -L (tunel)", url: "https://man.openbsd.org/ssh" } ] },
 
   { phase: "Zálohy", title: "Zapni noční zálohu", short: "Noční záloha",
     why: "Záloha je fotka všech dat. Každou noc se udělá nová a drží se posledních 14. Chat se na ni na pár sekund zastaví, proto ve 2:30.",
-    where: "Na serveru jako gaudi. V crontab -e přidej na konec řádek ze druhého příkazu.",
+    where: "Na serveru jako gaudi. Druhý příkaz přidá noční zálohu do crontabu; když tam už je, nepřidá ji podruhé.",
     command: `cd ~/openwebui-local && mkdir -p backups && scripts/backup.sh
-echo '30 2 * * * cd /home/gaudi/openwebui-local && scripts/backup.sh >> backups/backup.log 2>&1'
-crontab -e`,
+line='30 2 * * * cd /home/gaudi/openwebui-local && scripts/backup.sh >> backups/backup.log 2>&1'; crontab -l 2>/dev/null | grep -qxF "$line" || (crontab -l 2>/dev/null; echo "$line") | crontab -
+crontab -l`,
     see: "První příkaz končí „✓ backup complete“ a cestou ke složce. crontab -l ukáže nový řádek.",
     guides: [
       { label: "crontab: formát řádku", url: "https://manpages.ubuntu.com/manpages/noble/en/man5/crontab.5.html" } ] },

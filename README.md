@@ -98,6 +98,12 @@ WebSockety (streamované odpovědi). Adresa je `WEBUI_URL` v `.env`; bootstrap j
 připojení nemá žádná pravidla přístupu, což Open WebUI chápe jako „jen admin“. Kdo další ho smí používat,
 je konfigurace admina v UI a bootstrap ji nepřepisuje. Co vidí běžný uživatel: `scripts/demo-staff.sh`.
 
+## Nároky na server
+
+Naměřeno 12. 11. 2026 na běžícím stacku (`docker stats --no-stream`): Chat 712 MB, Brána 611 MB,
+Databáze 83 MB, Terminál 74 MB, Vchod 16 MB — dohromady asi 1,5 GB. Stropy v `docker-compose.yml`
+(`mem_limit`) dávají 4,3 GB, proto server s 8 GB RAM. Měř znovu po větší změně nebo upgradu.
+
 ## Zálohy
 
 `scripts/backup.sh` uloží dump databází `openwebui` a `litellm` a soubory Open WebUI (nahrané soubory,

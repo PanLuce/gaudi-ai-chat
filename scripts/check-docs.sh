@@ -94,7 +94,7 @@ guide.STEPS.forEach((step, index) => {
   if (/^\s*(echo [^|>]*openssl rand|openssl rand)/m.test(step.command)) {
     failed = true; console.error(`✗ step ${index + 1} (${step.title}): the command prints a generated secret`);
   }
-  if (/nano \.env|cat [^\n]*\.env|scp [^\n]*\.env/.test(step.command)
+  if (/nano \.env|(cat|grep|scp) [^\n]*\.env/.test(step.command)
       && !(step.manual && guide.promptFor(step, index).includes("Nespouštěj"))) {
     failed = true; console.error(`✗ step ${index + 1} (${step.title}): handles .env but is not a manual step`);
   }
@@ -155,7 +155,7 @@ JS
 }
 
 main() {
-  require_tools curl grep node
+  require_tools curl gh grep node
   local page
   for page in $PAGES; do
     check_page_exists "$page"
