@@ -58,8 +58,30 @@ check_no_secrets() {
     || fail "docs/$1 contains something that looks like a secret"
 }
 
+# Runs the guide's own data script in node and checks the prompt of every step that is ready.
+check_guide_prompts() {
+  node - "$REPO_ROOT/docs/nasazeni.html" <<'JS' || fail "docs/nasazeni.html: a step has no complete prompt"
+const fs = require("fs"), vm = require("vm");
+const html = fs.readFileSync(process.argv[2], "utf8");
+const data = html.match(/<script id="guide-data">([\s\S]*?)<\/script>/);
+if (!data) { console.error("✗ no <script id=\"guide-data\"> with the steps"); process.exit(1); }
+const context = {};
+vm.runInNewContext(data[1] + "\nthis.STEPS = STEPS; this.promptFor = promptFor;", context);
+let failed = false;
+context.STEPS.forEach((step, index) => {
+  if (step.todo) return;
+  const prompt = context.promptFor(step, index);
+  const required = [step.title, step.see, "gaudi-ai", "Nikdy nevypisuj"].concat(step.command ? [step.command] : []);
+  required.filter((part) => !prompt.includes(part))
+    .forEach((part) => { failed = true; console.error(`✗ step ${index + 1} (${step.title}): prompt lacks "${part.slice(0, 40)}"`); });
+});
+process.exit(failed ? 1 : 0);
+JS
+  pass "docs/nasazeni.html: every ready step exports a complete prompt"
+}
+
 main() {
-  require_tools curl grep
+  require_tools curl grep node
   local page
   for page in $PAGES; do
     check_page_exists "$page"
@@ -69,6 +91,7 @@ main() {
     check_links "$page"
     pass "docs/$page: links answer, one vocabulary, no secrets"
   done
+  check_guide_prompts
 }
 
 main "$@"

@@ -70,6 +70,12 @@ header { display: grid; gap: 10px; }
 .todo { background: var(--todo-soft); color: var(--todo); border-radius: 10px; padding: 12px 14px; font-weight: 500; }
 .badge { justify-self: start; font: 500 12px var(--font-mono); padding: 2px 9px; border-radius: 999px; background: var(--todo-soft); color: var(--todo); }
 
+/* Export as a prompt */
+.export { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 16px; }
+.export-button { justify-self: start; font: 600 14px var(--font-body); background: var(--accent-soft); color: var(--accent); border: 1.5px solid var(--accent); border-radius: 10px; padding: 8px 14px; cursor: pointer; }
+.export-preview summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+.export-preview pre { margin: 8px 0 0; padding: 12px 14px; background: var(--code-bg); color: var(--code-fg); border-radius: 10px; font: 13px/1.5 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+
 /* Navigation */
 nav { display: flex; justify-content: space-between; gap: 12px; }
 nav button { font: 600 15px var(--font-body); border-radius: 10px; padding: 10px 18px; cursor: pointer; border: 1.5px solid var(--accent); }
@@ -103,7 +109,7 @@ footer { color: var(--muted); font-size: 14px; }
   <footer>Příkazy pocházejí ze skriptů v repu (scripts/bootstrap.sh, scripts/smoke.sh, scripts/backup.sh). Průvodce se ověří při prvním skutečném nasazení; co nebude sedět, oprav tady.</footer>
 </div>
 
-<script>
+<script id="guide-data">
 // One record per step. "where" says where to do it, "see" what you should see afterwards.
 const STEPS = [
   { phase: "Příprava", title: "Co budeš potřebovat",
@@ -318,6 +324,33 @@ scripts/backup.sh && git pull && scripts/bootstrap.sh && scripts/smoke.sh`,
       { label: "Hetzner: zálohy a snímky serveru", url: "https://docs.hetzner.com/cloud/servers/backups-snapshots/overview" } ] },
 ];
 
+// The prompt for Claude Code on the admin's computer: the step itself, plus the rules every step shares.
+const PROMPT_CONTEXT = `Pomáháš mi nasadit AI chat Školy Gaudi na server Hetzner. Kód je v soukromém repu github.com/PanLuce/openwebui-local (docker compose: Vchod = Caddy, Chat = Open WebUI, Brána = LiteLLM, Databáze = Postgres, Terminál = open-terminal; Poskytovatelé Anthropic a Google).
+Server mám v ~/.ssh/config jako gaudi-ai (uživatel gaudi) a gaudi-ai-root (root). Kód je na serveru v ~/openwebui-local.`;
+
+const PROMPT_RULES = `Pravidla:
+- Nikdy nevypisuj obsah .env ani žádný klíč či heslo. Když je potřeba hodnota, řekni mi, kde ji najdu, a nech mě ji vložit.
+- Příkazy na serveru spouštěj přes ssh gaudi-ai, nebo ssh gaudi-ai-root tam, kde krok říká root.
+- Kroky ve webových konzolích (Hetzner, Gigaserver, GitHub, Anthropic, Google) neděláš ty: popiš mi je, počkej na moje „hotovo“ a pak ověř výsledek.
+- Nic nemaž a nic nepřeskakuj bez mého potvrzení.
+- Na konci ověř výsledek a napiš mi přesně, co vidíš.`;
+
+function promptFor(step, index) {
+  const parts = [
+    PROMPT_CONTEXT,
+    `Krok ${index + 1} z ${STEPS.length}: ${step.title} (fáze ${step.phase})`,
+    `Proč: ${step.why}`,
+    `Kde: ${step.where}`,
+  ];
+  if (step.command) parts.push("Příkazy:\n```bash\n" + step.command + "\n```");
+  parts.push(`Očekávaný výsledek: ${step.see}`);
+  if (step.guides.length) parts.push("Oficiální návod:\n" + step.guides.map((guide) => `- ${guide.label}: ${guide.url}`).join("\n"));
+  parts.push(PROMPT_RULES);
+  return parts.join("\n\n");
+}
+</script>
+
+<script>
 const PHASES = [...new Set(STEPS.map((step) => step.phase))];
 const STORAGE_KEY = "gaudi-nasazeni-krok";
 let current = readSavedStep();
@@ -401,6 +434,36 @@ function renderStep() {
   if (step.command) card.appendChild(field("Příkaz", commandBlock(step.command)));
   if (step.see) card.appendChild(field("Uvidíš", element("p", "", step.see)));
   if (step.guides.length) card.appendChild(field("Oficiální návod", guideList(step.guides)));
+  if (!step.todo) card.appendChild(promptExport(step, current));
+}
+
+// The prompt also sits in a closed box, so it can be selected by hand where copying is refused.
+function promptExport(step, index) {
+  const prompt = promptFor(step, index);
+  const box = element("div", "export");
+  const button = element("button", "export-button", "Export jako prompt");
+  button.type = "button";
+  const preview = element("details", "export-preview");
+  preview.appendChild(element("summary", "", "Zobrazit prompt pro Claude Code"));
+  const text = element("pre", "", prompt);
+  preview.appendChild(text);
+  button.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(prompt);
+      button.textContent = "Zkopírováno, vlož do Claude Code";
+    } catch {
+      preview.open = true;
+      const range = document.createRange();
+      range.selectNodeContents(text);
+      getSelection().removeAllRanges();
+      getSelection().addRange(range);
+      button.textContent = "Označeno, zkopíruj Ctrl+C";
+    }
+    setTimeout(() => { button.textContent = "Export jako prompt"; }, 2400);
+  });
+  box.appendChild(button);
+  box.appendChild(preview);
+  return box;
 }
 
 function renderProgress() {
