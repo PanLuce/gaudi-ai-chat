@@ -8,6 +8,9 @@ set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 readonly BACKUPS_KEPT=14
+readonly CHAT_SERVICE="open-webui"
+readonly CHAT_DATABASE="openwebui" # saved while Chat is stopped, together with its files
+readonly GATEWAY_DATABASE="litellm"
 
 dump_database() {
   compose exec -T postgres pg_dump -U postgres -Fc "$1" > "$2/$1.dump" || fail "could not dump database $1"
@@ -18,13 +21,11 @@ archive_openwebui_files() {
     tar czf - -C /data --exclude ./cache . > "$1/$OPENWEBUI_VOLUME.tar.gz" || fail "could not archive $OPENWEBUI_VOLUME"
 }
 
-readonly CHAT_SERVICE="open-webui"
-readonly CHAT_DATABASE="openwebui" # saved while Chat is stopped, together with its files
-
 CHAT_STOPPED=false
 
 start_chat() {
-  compose up -d --wait "$CHAT_SERVICE" >/dev/null 2>&1 || fail "Chat ($CHAT_SERVICE) did not start again after the backup"
+  local output
+  output=$(compose up -d --wait "$CHAT_SERVICE" 2>&1) || fail "Chat ($CHAT_SERVICE) did not start again after the backup: $output"
   CHAT_STOPPED=false
 }
 
@@ -38,7 +39,8 @@ restart_chat_if_stopped() {
 stop_chat() {
   on_exit_cleanup restart_chat_if_stopped
   CHAT_STOPPED=true
-  compose stop "$CHAT_SERVICE" >/dev/null 2>&1 || fail "could not stop Chat ($CHAT_SERVICE) for the backup"
+  local output
+  output=$(compose stop "$CHAT_SERVICE" 2>&1) || fail "could not stop Chat ($CHAT_SERVICE) for the backup: $output"
 }
 
 remove_old_backups() {
@@ -51,14 +53,12 @@ remove_old_backups() {
 main() {
   require_tools docker jq
   load_env
-  local dir partial stopped_at database
+  local dir partial stopped_at
   umask 077 # backups hold everyone's chats
   dir="$BACKUP_ROOT/$(date -u +%Y%m%dT%H%M%SZ)"
   partial="$dir.partial" # an interrupted backup never looks like a complete one
   mkdir -p "$partial"
-  for database in $APP_DATABASES; do
-    [ "$database" = "$CHAT_DATABASE" ] || dump_database "$database" "$partial"
-  done
+  dump_database "$GATEWAY_DATABASE" "$partial"
   stopped_at=$(date +%s)
   stop_chat
   dump_database "$CHAT_DATABASE" "$partial"

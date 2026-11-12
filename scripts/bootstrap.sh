@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
-# Brings the stack to its configured state. Safe to run any number of times:
-#   1. generates missing secrets into .env
-#   2. starts the stack
-#   3. ensures Open WebUI's own LiteLLM key (with an instance-wide monthly cap)
-#   4. points Open WebUI's connection at LiteLLM with that key
+# Brings the stack to the state .env describes. Safe to run any number of times: generates missing
+# secrets, starts the stack, sets up LiteLLM (Open WebUI's key, the staff budget) and, once .env has
+# an Open WebUI admin key, Open WebUI (connection, first model setup, images, address, terminal). See main.
 set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
@@ -11,6 +9,7 @@ set -euo pipefail
 readonly OPENWEBUI_KEY_MONTHLY_BUDGET_USD=100
 readonly OPENWEBUI_KEY_ALIAS="open-webui"
 
+readonly LITELLM_FOR_OPENWEBUI="http://litellm:4000/v1" # LiteLLM's address inside the compose network
 readonly IMAGE_MODEL="gemini-image"
 readonly TERMINAL_ID="open-terminal"
 
@@ -68,10 +67,10 @@ ensure_openwebui_litellm_key() {
   fi
   local key
   # Remove keys left from earlier runs so only one key carries the instance-wide cap.
-  litellm_admin POST /key/delete "{\"key_aliases\":[\"$OPENWEBUI_KEY_ALIAS\"]}" >/dev/null 2>&1 || true
-  key=$(litellm_admin POST /key/generate \
-    "{\"key_alias\":\"$OPENWEBUI_KEY_ALIAS\",\"max_budget\":$OPENWEBUI_KEY_MONTHLY_BUDGET_USD,\"budget_duration\":\"30d\"}" \
-    | jq -er '.key') || fail "could not create the Open WebUI key in LiteLLM"
+  delete_litellm_key_alias "$OPENWEBUI_KEY_ALIAS" 2>/dev/null || true
+  key=$(litellm_admin POST /key/generate "$(jq -cn --arg a "$OPENWEBUI_KEY_ALIAS" --argjson usd "$OPENWEBUI_KEY_MONTHLY_BUDGET_USD" \
+    '{key_alias: $a, max_budget: $usd, budget_duration: "30d"}')" | jq -er '.key') \
+    || fail "could not create the Open WebUI key in LiteLLM"
   set_env_value OPENWEBUI_LITELLM_KEY "$key"
   OPENWEBUI_LITELLM_KEY=$key
   info "created Open WebUI LiteLLM key (cap \$$OPENWEBUI_KEY_MONTHLY_BUDGET_USD / 30 days)"
@@ -88,9 +87,22 @@ ensure_staff_budget() {
   info "staff budget: \$$STAFF_BUDGET_USD per 30 days ($STAFF_BUDGET_ID)"
 }
 
+# The HTTP status of an admin GET to Open WebUI; 000 when it does not answer at all.
+openwebui_admin_status() {
+  curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
+    --config <(printf 'header = "Authorization: Bearer %s"\n' "$OPENWEBUI_ADMIN_API_KEY") "$OPENWEBUI_URL$1" || true
+}
+
 # Open WebUI shows a connection model only to admins until it has its own entry with access rules.
+# Only "not found" means missing: a failed lookup must stop bootstrap, never reset the admin's settings.
 model_entry_exists() {
-  openwebui_admin GET "/api/v1/models/model?id=$1" 2>/dev/null | jq -e '.id' >/dev/null
+  local status
+  status=$(openwebui_admin_status "/api/v1/models/model?id=$1")
+  case "$status" in
+    200) return 0 ;;
+    404) return 1 ;;
+    *) fail "could not look up model entry $1 in Open WebUI (HTTP $status); nothing was changed" ;;
+  esac
 }
 
 # Creates the model's entry with its initial name and visibility; existing entries are left as they are.
@@ -122,14 +134,21 @@ seed_models() {
   seed_default_model "${INITIAL_MODELS[0]%%|*}"
 }
 
+# Reads an Open WebUI admin setting, changes it with jq and writes it back:
+# update_openwebui_config <GET path> <POST path> <jq arguments and filter…>
+update_openwebui_config() {
+  local get=$1 post=$2 config
+  shift 2
+  config=$(openwebui_admin GET "$get" | jq -c "$@") && openwebui_admin POST "$post" "$config" >/dev/null
+}
+
 # Image generation goes through LiteLLM too, so images count against the same budgets.
 sync_openwebui_image_generation() {
-  openwebui_admin GET /api/v1/images/config \
-    | jq -c --arg key "$OPENWEBUI_LITELLM_KEY" --arg model "$IMAGE_MODEL" '
-        .ENABLE_IMAGE_GENERATION = true | .IMAGE_GENERATION_ENGINE = "openai"
-        | .IMAGES_OPENAI_API_BASE_URL = "http://litellm:4000/v1" | .IMAGES_OPENAI_API_KEY = $key
-        | .IMAGE_GENERATION_MODEL = $model | .IMAGE_SIZE = "1024x1024"' \
-    | { read -r config; openwebui_admin POST /api/v1/images/config/update "$config" >/dev/null; } \
+  update_openwebui_config /api/v1/images/config /api/v1/images/config/update \
+    --arg url "$LITELLM_FOR_OPENWEBUI" --arg key "$OPENWEBUI_LITELLM_KEY" --arg model "$IMAGE_MODEL" '
+      .ENABLE_IMAGE_GENERATION = true | .IMAGE_GENERATION_ENGINE = "openai"
+      | .IMAGES_OPENAI_API_BASE_URL = $url | .IMAGES_OPENAI_API_KEY = $key
+      | .IMAGE_GENERATION_MODEL = $model | .IMAGE_SIZE = "1024x1024"' \
     || fail "could not configure image generation"
   info "image generation: $IMAGE_MODEL through LiteLLM"
 }
@@ -137,14 +156,13 @@ sync_openwebui_image_generation() {
 # Address and key of the terminal come from the deployment; who may use it is the connection's
 # access rules. A new connection has none, which Open WebUI treats as administrators only.
 sync_openwebui_terminal() {
-  openwebui_admin GET /api/v1/configs/terminal_servers \
-    | jq -c --arg id "$TERMINAL_ID" --arg key "$OPEN_TERMINAL_API_KEY" '
-        .TERMINAL_SERVER_CONNECTIONS |= (
-          (map(select(.id == $id)) | first // {config: {}}) as $current
-          | map(select(.id != $id))
-          + [$current + {id: $id, name: "Terminál serveru", enabled: true,
-                         url: "http://open-terminal:8000", key: $key, auth_type: "bearer"}])' \
-    | { read -r config; openwebui_admin POST /api/v1/configs/terminal_servers "$config" >/dev/null; } \
+  update_openwebui_config /api/v1/configs/terminal_servers /api/v1/configs/terminal_servers \
+    --arg id "$TERMINAL_ID" --arg key "$OPEN_TERMINAL_API_KEY" '
+      .TERMINAL_SERVER_CONNECTIONS |= (
+        (map(select(.id == $id)) | first // {config: {}}) as $current
+        | map(select(.id != $id))
+        + [$current + {id: $id, name: "Terminál serveru", enabled: true,
+                       url: "http://open-terminal:8000", key: $key, auth_type: "bearer"}])' \
     || fail "could not configure the terminal connection"
   info "terminal $TERMINAL_ID connected (administrators only unless the admin grants more)"
 }
@@ -153,20 +171,15 @@ sync_openwebui_terminal() {
 # MFA fields are left out: only a signed-in administrator may change them, not an API key,
 # and Open WebUI keeps them as they are when they are not sent.
 sync_openwebui_public_address() {
-  openwebui_admin GET /api/v1/auths/admin/config \
-    | jq -c --arg url "$OPENWEBUI_URL" '.WEBUI_URL = $url | with_entries(select(.key | test("MFA") | not))' \
-    | { read -r config; openwebui_admin POST /api/v1/auths/admin/config "$config" >/dev/null; } \
+  update_openwebui_config /api/v1/auths/admin/config /api/v1/auths/admin/config \
+    --arg url "$OPENWEBUI_URL" '.WEBUI_URL = $url | with_entries(select(.key | test("MFA") | not))' \
     || fail "could not set Open WebUI's public address"
   info "Open WebUI public address: $OPENWEBUI_URL"
 }
 
 sync_openwebui_connection() {
-  if [ -z "${OPENWEBUI_ADMIN_API_KEY:-}" ]; then
-    info "skipped Open WebUI connection sync: OPENWEBUI_ADMIN_API_KEY not set (see README)"
-    return
-  fi
-  openwebui_admin POST /openai/config/update "$(jq -n --arg key "$OPENWEBUI_LITELLM_KEY" \
-    '{ENABLE_OPENAI_API: true, OPENAI_API_BASE_URLS: ["http://litellm:4000/v1"], OPENAI_API_KEYS: [$key], OPENAI_API_CONFIGS: {}}')" \
+  openwebui_admin POST /openai/config/update "$(jq -n --arg url "$LITELLM_FOR_OPENWEBUI" --arg key "$OPENWEBUI_LITELLM_KEY" \
+    '{ENABLE_OPENAI_API: true, OPENAI_API_BASE_URLS: [$url], OPENAI_API_KEYS: [$key], OPENAI_API_CONFIGS: {}}')" \
     >/dev/null || fail "could not update Open WebUI's connection: is OPENWEBUI_ADMIN_API_KEY valid? A fresh database needs a new one (README: Admin API key)"
   info "Open WebUI connection points at LiteLLM with its own key"
 }
@@ -180,8 +193,10 @@ main() {
   compose up -d --wait
   ensure_openwebui_litellm_key
   ensure_staff_budget
-  sync_openwebui_connection
-  if [ -n "${OPENWEBUI_ADMIN_API_KEY:-}" ]; then
+  if [ -z "${OPENWEBUI_ADMIN_API_KEY:-}" ]; then
+    info "skipped the Open WebUI steps: OPENWEBUI_ADMIN_API_KEY not set yet (README: Admin API key)"
+  else
+    sync_openwebui_connection
     seed_models
     sync_openwebui_image_generation
     sync_openwebui_public_address

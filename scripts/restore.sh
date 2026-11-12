@@ -2,7 +2,7 @@
 # Restores a backup made by scripts/backup.sh. Everything written since that backup is lost.
 # Usage: scripts/restore.sh [--yes] backups/<UTC time>
 set -euo pipefail
-. "$(dirname "$0")/lib.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 readonly APP_SERVICES="caddy open-webui litellm"
 
@@ -35,11 +35,13 @@ back_up_current_state() {
 }
 
 # Dropping and re-creating leaves nothing behind that was created after the backup.
+drop_database() {
+  compose exec -T postgres psql -U postgres -v ON_ERROR_STOP=1 -q -c "DROP DATABASE IF EXISTS $1 WITH (FORCE)" \
+    || fail "could not drop database $1"
+}
+
 restore_database() {
   local database=$1 dump=$2
-  compose exec -T postgres psql -U postgres -v ON_ERROR_STOP=1 -q -c "DROP DATABASE IF EXISTS $database WITH (FORCE)" \
-    || fail "could not drop database $database"
-  compose run --rm -T db-init >/dev/null || fail "could not re-create database $database"
   compose exec -T postgres pg_restore -U postgres --no-owner --role="$database" -d "$database" < "$dump" \
     || fail "could not restore database $database"
   info "restored database $database"
@@ -70,10 +72,12 @@ main() {
   # shellcheck disable=SC2086
   compose stop $APP_SERVICES
   local database
+  for database in $APP_DATABASES; do drop_database "$database"; done
+  compose run --rm -T db-init >/dev/null || fail "could not re-create the databases"
   for database in $APP_DATABASES; do restore_database "$database" "$dir/$database.dump"; done
   restore_openwebui_files "$dir/$OPENWEBUI_VOLUME.tar.gz"
   compose up -d --wait
   pass "restored $dir"
 }
 
-main "$@"
+[ "${BASH_SOURCE[0]}" != "$0" ] || main "$@"

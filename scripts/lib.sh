@@ -67,58 +67,9 @@ run_cleanup() {
 }
 trap run_cleanup EXIT
 
-# LiteLLM writes request logs asynchronously and re-creates the customer row when it does,
-# so delete, wait for pending writes, then delete again.
-delete_litellm_customer() {
-  local body
-  body=$(jq -cn --arg e "$1" '{user_ids: [$e]}')
-  litellm_admin POST /customer/delete "$body" >/dev/null 2>&1 || true
-  sleep 5
-  litellm_admin POST /customer/delete "$body" >/dev/null 2>&1 || true
-}
-
 # Deletes a LiteLLM key by its alias, so a failed cleanup never prints the key itself.
 delete_litellm_key_alias() {
   litellm_admin POST /key/delete "$(jq -cn --arg a "$1" '{key_aliases: [$a]}')" >/dev/null
-}
-
-# Creates a LiteLLM customer with the given spend, deleted on exit.
-create_temporary_customer() {
-  local email=$1 spend=$2
-  litellm_admin POST /customer/new "$(jq -n --arg e "$email" --argjson s "$spend" '{user_id: $e, spend: $s}')" >/dev/null \
-    || fail "could not create customer $email"
-  on_exit_cleanup delete_litellm_customer "$email"
-}
-
-unique_smoke_email() { echo "smoke-$(date +%s)-$RANDOM@skolagaudi.cz"; }
-
-# Creates a regular Open WebUI user, deleted on exit, and signs it in: sets TEMP_USER_TOKEN.
-# Call it directly, never inside $(...): a subshell would lose the cleanup registration.
-create_temporary_staff_user() {
-  local email=$1 password user_id
-  password=$(openssl rand -hex 16)
-  user_id=$(openwebui_admin POST /api/v1/auths/add \
-    "$(jq -n --arg e "$email" --arg p "$password" '{name: $e, email: $e, password: $p, role: "user"}')" | jq -er .id) \
-    || fail "could not create temporary user $email"
-  on_exit_cleanup openwebui_admin DELETE "/api/v1/users/$user_id"
-  TEMP_USER_TOKEN=$(api_request "" POST "$OPENWEBUI_URL/api/v1/auths/signin" \
-    "$(jq -n --arg e "$email" --arg p "$password" '{email: $e, password: $p}')" | jq -er .token) \
-    || fail "could not sign in temporary user $email"
-}
-
-# Creates a regular Open WebUI account for trying things in the browser, deleted on exit.
-# Call it directly, never inside $(...): a subshell would lose the cleanup registration.
-create_demo_staff_account() {
-  local email=$1 password=$2 name=$3 user_id
-  user_id=$(openwebui_admin POST /api/v1/auths/add \
-    "$(jq -n --arg e "$email" --arg p "$password" --arg n "$name" '{name: $n, email: $e, password: $p, role: "user"}')" \
-    | jq -er .id) || fail "could not create the demo account"
-  on_exit_cleanup openwebui_admin DELETE "/api/v1/users/$user_id"
-}
-
-wait_until_demo_is_done() {
-  read -r -p "Press Enter when done (the account is then deleted)… " _
-  info "deleting the demo account"
 }
 
 # Each application has a database and a login role of the same name (postgres/ensure-databases.sh).
