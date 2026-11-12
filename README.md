@@ -102,5 +102,7 @@ je konfigurace admina v UI a bootstrap ji nepřepisuje. Co vidí běžný uživa
 
 `scripts/backup.sh` uloží dump databází `openwebui` a `litellm` a soubory Open WebUI (nahrané soubory,
 vektorový index; bez `cache/` se staženými modely) do `backups/<čas>/` (jen pro vlastníka, mimo git).
+Po dobu uložení databáze `openwebui` a souborů je Chat zastavený (dnes ~15 s, `backup.sh` vypíše
+`chat stopped for N s`), aby databáze a soubory byly ze stejné chvíle a index se nekopíroval během zápisu.
 `.env` v záloze není — kopie patří do správce hesel, obnova na jiném serveru ji potřebuje.
-Na serveru: denně z cronu a kopie mimo server (krok nasazení).
+Na serveru: denně z cronu ve 2:30 (krátký výpadek v noci) a kopie mimo server (krok nasazení).
