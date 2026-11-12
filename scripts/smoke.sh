@@ -133,10 +133,10 @@ check_overspent_user_is_blocked_in_openwebui() {
   email=$(unique_smoke_email)
   create_temporary_staff_user "$email"
   create_temporary_customer "$email" 6
-  assert_blocked_by_budget /api/chat/completions "$SMALL_CHAT"
-  pass "a user over budget is blocked in Open WebUI"
+  assert_blocked_by_budget /api/chat/completions "$SMALL_CHAT" "$email"
+  pass "a user over budget is blocked in Open WebUI with a Czech message"
   # A custom "user" parameter (allowed in chat settings) must not move spend to another identity.
-  assert_blocked_by_budget /api/chat/completions "$(jq -c '.user = "someone-else@skolagaudi.cz"' <<<"$SMALL_CHAT")"
+  assert_blocked_by_budget /api/chat/completions "$(jq -c '.user = "someone-else@skolagaudi.cz"' <<<"$SMALL_CHAT")" "$email"
   pass "the budget cannot be dodged with a custom 'user' parameter"
   assert_image_blocked_by_budget "$email"
   pass "a user over budget cannot generate images either"
@@ -165,11 +165,88 @@ image_refused_for_budget() {
         and ((.metadata.error_information.error_message // "") | contains("ExceededBudget")))' >/dev/null
 }
 
+# "2026-12-01T00:00:00Z" -> "1. 12. 2026". Resets happen at midnight UTC, so the UTC day is the Prague day.
+staff_budget_reset_day() {
+  litellm_admin POST /budget/info "{\"budgets\":[\"$STAFF_BUDGET_ID\"]}" \
+    | jq -r '.[0].budget_reset_at[0:10] | split("-") | map(tonumber) | "\(.[2]). \(.[1]). \(.[0])"'
+}
+
+# The person sees a Czech message with a code for the admin, never their e-mail or LiteLLM internals.
 assert_blocked_by_budget() {
-  local path=$1 request=$2 response
+  local path=$1 request=$2 email=$3 response
   response=$(api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL$path" "$request" 2>/dev/null || true)
-  grep -q "ExceededBudget" <<<"$response" \
-    || fail "overspent user was not blocked by budget: $(head -c 300 <<<"$response")"
+  grep -q "Tvůj rozpočet na AI chat je vyčerpaný" <<<"$response" && grep -q "(kód: rozpocet)" <<<"$response" \
+    || fail "overspent user did not get the Czech budget message: $(head -c 300 <<<"$response")"
+  grep -qF "Rozpočet se obnoví $(staff_budget_reset_day)." <<<"$response" \
+    || fail "the budget message does not say when the budget resets ($(staff_budget_reset_day)): $(head -c 300 <<<"$response")"
+  ! grep -qE "$email|ExceededBudget" <<<"$response" \
+    || fail "the budget message shows the e-mail or LiteLLM internals: $(head -c 300 <<<"$response")"
+}
+
+# The school's budget lives on the key Open WebUI uses. A temporary key with spend over its budget
+# gets the same error. Free only if LiteLLM really recorded the spend, so that is checked before
+# the call: otherwise the request would reach the provider.
+check_school_budget_message_is_czech() {
+  local alias key response
+  alias="smoke-$(date +%s)-$RANDOM"
+  key=$(litellm_admin POST /key/generate "$(jq -cn --arg a "$alias" '{key_alias: $a, max_budget: 1, spend: 2, models: ["claude-haiku"]}')" \
+    | jq -er .key) || fail "could not create temporary key $alias"
+  on_exit_cleanup delete_litellm_key_alias "$alias"
+  [ "$(litellm_as "$key" GET /key/info | jq -r '.info.spend')" = "2.0" ] \
+    || fail "temporary key $alias has no recorded spend; refusing a call that could be paid"
+  response=$(litellm_as "$key" POST /v1/chat/completions "$SMALL_CHAT" 2>/dev/null || true)
+  grep -q "AI chat má tento měsíc vyčerpaný rozpočet celé školy" <<<"$response" && grep -q "(kód: rozpocet-skoly)" <<<"$response" \
+    || fail "a key over budget did not get the Czech school budget message: $(head -c 300 <<<"$response")"
+  ! grep -qE "Key=|Budget has been exceeded" <<<"$response" \
+    || fail "the school budget message shows LiteLLM internals: $(head -c 300 <<<"$response")"
+  pass "when the school budget runs out, people get a Czech message"
+}
+
+# Free: LiteLLM rejects an unknown model before any provider call. Sent with the key Open WebUI
+# uses, so this is the error people would see if a model disappeared from litellm/config.yaml.
+check_config_error_message_is_czech() {
+  local response
+  response=$(litellm_as "$OPENWEBUI_LITELLM_KEY" POST /v1/chat/completions \
+    '{"model":"smoke-no-such-model","max_tokens":5,"messages":[{"role":"user","content":"ahoj"}]}' 2>/dev/null || true)
+  grep -q "Chyba v nastavení AI chatu" <<<"$response" && grep -q "(kód: nastaveni)" <<<"$response" \
+    || fail "an unknown model did not get the Czech settings message: $(head -c 300 <<<"$response")"
+  pass "a broken model setting shows a Czech message"
+}
+
+# Provider errors cannot be caused for free, so the mapping runs against LiteLLM's own exception
+# classes inside the LiteLLM image, without network.
+check_provider_errors_are_czech() {
+  compose run --rm --no-deps -T --entrypoint python litellm - <<'PY_CHECK' || fail "a provider error has no Czech message"
+import sys, httpx, litellm
+from litellm.proxy._types import ProxyException
+sys.path.insert(0, "/app")
+from czech_errors import czech_message
+
+forbidden = httpx.Response(403, request=httpx.Request("POST", "https://provider"))
+cases = [
+    ("pretizeno", litellm.RateLimitError("rate limited", "anthropic", "claude")),
+    ("pretizeno", litellm.ServiceUnavailableError("unavailable", "anthropic", "claude")),
+    ("pretizeno", litellm.InternalServerError("AnthropicException - Overloaded", "anthropic", "claude")),
+    ("cas", litellm.Timeout("timed out", "claude", "anthropic")),
+    ("dlouha-konverzace", litellm.ContextWindowExceededError("prompt is too long", "claude", "anthropic")),
+    ("odmitnuto", litellm.ContentPolicyViolationError("blocked", "claude", "anthropic")),
+    ("nastaveni", litellm.AuthenticationError("invalid x-api-key", "anthropic", "claude")),
+    ("nastaveni", litellm.PermissionDeniedError("no access", "anthropic", "claude", forbidden)),
+    ("nastaveni", litellm.NotFoundError("model not found", "claude", "anthropic")),
+    ("nastaveni", ProxyException("Invalid model name passed in model=x", "invalid_request_error", None, 400)),
+    ("jina", litellm.BadRequestError("max_tokens is too large", "claude", "anthropic")),
+    ("jina", litellm.APIConnectionError("connection reset", "anthropic", "claude")),
+    ("jina", ValueError("anything else")),
+]
+failed = False
+for wanted, exc in cases:
+    got = czech_message(exc)
+    if not got or got[0] != wanted or not got[1]:
+        failed = True
+        print(f"✗ {type(exc).__name__}: got {got}, wanted code {wanted}", file=sys.stderr)
+sys.exit(1 if failed else 0)
+PY_CHECK
+  pass "every kind of provider error has a Czech message"
 }
 
 check_haiku_answers_in_openwebui() {
@@ -196,6 +273,9 @@ run_free_checks() {
   check_admin_runs_commands_in_the_terminal
   check_default_staff_budget
   check_overspent_user_is_blocked_in_openwebui
+  check_school_budget_message_is_czech
+  check_config_error_message_is_czech
+  check_provider_errors_are_czech
 }
 
 # Paid: a real answer for a staff member is charged to that person's e-mail.

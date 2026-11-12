@@ -77,6 +77,11 @@ delete_litellm_customer() {
   litellm_admin POST /customer/delete "$body" >/dev/null 2>&1 || true
 }
 
+# Deletes a LiteLLM key by its alias, so a failed cleanup never prints the key itself.
+delete_litellm_key_alias() {
+  litellm_admin POST /key/delete "$(jq -cn --arg a "$1" '{key_aliases: [$a]}')" >/dev/null
+}
+
 # Creates a LiteLLM customer with the given spend, deleted on exit.
 create_temporary_customer() {
   local email=$1 spend=$2
