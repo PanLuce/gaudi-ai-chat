@@ -122,9 +122,9 @@ const STEPS = [
       { label: "Gemini API: placená úroveň", url: "https://ai.google.dev/gemini-api/docs/billing" } ] },
 
   { phase: "Příprava", title: "Nastav stropy u poskytovatelů", short: "Stropy",
-    why: "Brána hlídá 5 $ na člověka a 100 $ na celou školu. Strop přímo u poskytovatele je pojistka pro případ, že by Brána selhala: víc, než kolik nastavíš, poskytovatel za měsíc nevyúčtuje.",
-    where: "V prohlížeči. Anthropic Console → Settings → Workspaces → openwebui → Limits: měsíční limit útraty 100 $. Google AI Studio → Spend → Monthly spend cap → Edit spend cap: 20 $ pro projekt, ze kterého je klíč Gemini. Google útratu sčítá s několikaminutovým zpožděním, strop proto může být o kousek překročen.",
-    see: "U workspace openwebui je limit 100 $, v AI Studio u projektu Monthly spend cap 20 $.",
+    why: "Brána hlídá 5 $ na člověka a 100 $ na celou školu. Strop přímo u poskytovatele je doporučená pojistka pro případ, že by Brána selhala: víc, než kolik nastavíš, poskytovatel za měsíc nevyúčtuje. Výši určuješ ty podle rozpočtu školy; systém na ni nijak nesahá.",
+    where: "V prohlížeči. Anthropic Console → Settings → Workspaces → openwebui → Limits (doporučení: měsíčně 100 $, stejně jako strop školy v Bráně). Google AI Studio → Spend → Monthly spend cap → Edit spend cap u projektu, ze kterého je klíč Gemini (doporučení: 20 $, obrázek stojí asi 0,045 $). Google útratu sčítá s několikaminutovým zpožděním, strop proto může být o kousek překročen.",
+    see: "U workspace openwebui je měsíční limit a v AI Studio u projektu Monthly spend cap ve výši, kterou jsi zvolil.",
     guides: [
       { label: "Anthropic Console: workspaces a jejich limity", url: "https://console.anthropic.com/settings/workspaces" },
       { label: "Gemini API: billing a spend cap", url: "https://ai.google.dev/gemini-api/docs/billing" } ] },
