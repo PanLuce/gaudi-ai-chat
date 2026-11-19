@@ -14,5 +14,6 @@ Caddy + Open WebUI + LiteLLM + Postgres + open-terminal stack for Škola Gaudi s
 - Verify with `scripts/smoke.sh` after every change; add a failing check first, then the change.
 - Smoke checks that create data tag it `smoke-<timestamp>` and delete it in an EXIT trap.
 - Scripts read `.env`, which the Claude Code sandbox may not read, and `docker` needs the Docker socket: run scripts and docker commands outside the sandbox.
+- `scripts/check-docs.sh` needs the running stack (its link checks call localhost). Without it, run the offline checks alone: copy the script without its last line (`main "$@"`), then call only `check_overview_*` and `check_guide_*`.
 - Never print or commit secrets; `.env` is git-ignored.
 - Claude creates feature branches itself (`git switch -c <name>`, run outside the sandbox) — no manual branch step for the user.
