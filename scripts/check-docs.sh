@@ -184,7 +184,8 @@ check_overview_trip() {
 let failed = false;
 const report = (message) => { failed = true; console.error(`✗ ${message}`); };
 const ids = new Set(overview.PARTS.map((part) => part.id));
-const pathOrder = overview.PARTS.filter((part) => part.place === "path").map((part) => part.id);
+// The question starts with the person before the picture, then travels along the path.
+const pathOrder = overview.PARTS.filter((part) => part.place === "start" || part.place === "path").map((part) => part.id);
 let lastPathIndex = -1;
 overview.TRIP.forEach((step, index) => {
   const label = `trip step ${index + 1}`;
@@ -210,6 +211,22 @@ overview.PARTS.filter((part) => !/<svg[\s\S]*<\/svg>/.test(overview.ICONS[part.i
 process.exit(failed ? 1 : 0);
 JS
   pass "docs/prehled.html: the query trip follows Franta's question across the picture, one line and one icon per step"
+}
+
+check_overview_counts_parts() {
+  run_overview_check "docs/prehled.html: the person who asks is counted as a part of the system" <<'JS'
+let failed = false;
+const report = (message) => { failed = true; console.error(`✗ ${message}`); };
+// The person who asks stands before the picture, so a newcomer does not take them for a part (or for the Chat window).
+const start = overview.PARTS.filter((part) => part.place === "start");
+if (start.length !== 1 || start[0].kind !== "person") report(`expected one person at place "start", found ${start.length}`);
+const systemParts = overview.PARTS.filter((part) => part.place !== "start").length;
+const NUMBERS = { Čtyři: 4, Pět: 5, Šest: 6, Sedm: 7 };
+const lead = fs.readFileSync(process.argv[2], "utf8").match(/<p class="lead">(\S+) částí/);
+if (!lead || NUMBERS[lead[1]] !== systemParts) report(`the lead says "${lead && lead[1]}" parts, the system has ${systemParts}`);
+process.exit(failed ? 1 : 0);
+JS
+  pass "docs/prehled.html: the person who asks stands before the picture; the lead counts only the system's parts"
 }
 
 check_guide_offsite_copy() {
@@ -293,6 +310,7 @@ main() {
   check_guide_phases
   check_guide_phase_steps
   check_overview_trip
+  check_overview_counts_parts
   check_guide_offsite_copy
   check_guide_matches_the_stack
   check_readme_restore_order
