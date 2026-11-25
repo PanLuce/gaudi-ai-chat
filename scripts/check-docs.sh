@@ -11,7 +11,7 @@ readonly VOCABULARY="Vchod Chat Brána Databáze Terminál Poskytovatelé"
 # Exists only after deployment.
 readonly NOT_YET_DEPLOYED="ai.skolagaudi.cz"
 # Private: anonymous requests get 404, so ask GitHub as the signed-in user.
-readonly PRIVATE_REPO="github.com/PanLuce/openwebui-local"
+readonly PRIVATE_REPO="github.com/PanLuce/gaudi-ai-chat"
 
 check_page_exists() {
   [ -s "$REPO_ROOT/docs/$1" ] || fail "docs/$1 is missing"
@@ -37,6 +37,13 @@ check_link() {
     401|403|429) info "$page: $url answers $status (blocks robots), check it by hand" ;;
     *) fail "$page: $url answers ${status:-nothing}" ;;
   esac
+}
+
+# A renamed repo still redirects, so a stale name would pass the link check unnoticed.
+check_repo_name() {
+  local stale
+  stale=$(grep -oE 'PanLuce/[A-Za-z0-9._-]+' "$REPO_ROOT/docs/$1" | sed 's/\.git$//' | sort -u | grep -vx "${PRIVATE_REPO#github.com/}" || true)
+  [ -z "$stale" ] || fail "docs/$1 names the repo as $stale, not ${PRIVATE_REPO#github.com/}"
 }
 
 check_links() {
@@ -303,6 +310,7 @@ main() {
     check_vocabulary "$page"
     check_mentioned_scripts_exist "$page"
     check_no_secrets "$page"
+    check_repo_name "$page"
     check_links "$page"
     pass "docs/$page: links answer, one vocabulary, no secrets"
   done

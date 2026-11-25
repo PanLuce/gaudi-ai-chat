@@ -211,23 +211,23 @@ exit`,
 
   { phase: "Kód", title: "Dej serveru přístup ke kódu", short: "Přístup ke kódu",
     why: "Repo je soukromé. Server dostane vlastní klíč, který smí kód jen číst, a když ho někdy zrušíš, nic jiného se nerozbije.",
-    where: "Na serveru jako gaudi: ssh gaudi-ai. Vypsaný řádek vlož na GitHubu → repo openwebui-local → Settings → Deploy keys → Add deploy key, název gaudi-ai, bez zaškrtnutí Allow write access.",
+    where: "Na serveru jako gaudi: ssh gaudi-ai. Vypsaný řádek vlož na GitHubu → repo gaudi-ai-chat → Settings → Deploy keys → Add deploy key, název gaudi-ai, bez zaškrtnutí Allow write access.",
     command: `ssh-keygen -t ed25519 -f ~/.ssh/github_deploy -N "" -C "gaudi-ai-deploy"
 printf 'Host github.com\\n  IdentityFile ~/.ssh/github_deploy\\n' >> ~/.ssh/config
 cat ~/.ssh/github_deploy.pub`,
     see: "Na GitHubu je v Deploy keys klíč gaudi-ai (Read-only).",
     guides: [
       { label: "GitHub: Managing deploy keys", url: "https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys" },
-      { label: "Deploy keys repa openwebui-local", url: "https://github.com/PanLuce/openwebui-local/settings/keys" } ] },
+      { label: "Deploy keys repa gaudi-ai-chat", url: "https://github.com/PanLuce/gaudi-ai-chat/settings/keys" } ] },
 
   { phase: "Kód", title: "Stáhni kód na server", short: "Stažení kódu",
     why: "Teď si server kód skutečně stáhne. Od té doby ho jen aktualizuješ.",
     where: "Na serveru jako gaudi: ssh gaudi-ai.",
-    command: `git clone git@github.com:PanLuce/openwebui-local.git ~/openwebui-local
+    command: `git clone git@github.com:PanLuce/gaudi-ai-chat.git ~/openwebui-local
 ls ~/openwebui-local/scripts`,
     see: "Výpis skriptů: backup.sh, bootstrap.sh, smoke.sh a další.",
     guides: [
-      { label: "Kód systému na GitHubu", url: "https://github.com/PanLuce/openwebui-local" } ] },
+      { label: "Kód systému na GitHubu", url: "https://github.com/PanLuce/gaudi-ai-chat" } ] },
 
   { phase: "Hesla", title: "Vyplň .env", short: "Vyplnění .env", manual: true,
     why: "Soubor .env je trezor s klíči. Nové prostředí dostane nová hesla; ta, která jsou prázdná, vygeneruje bootstrap sám.",
@@ -341,7 +341,7 @@ scripts/offsite.sh list`,
 ];
 
 // The prompt for Claude Code on the admin's computer: the step itself, plus the rules every step shares.
-const PROMPT_CONTEXT = `Pomáháš mi nasadit AI chat Školy Gaudi na server Hetzner. Kód je v soukromém repu github.com/PanLuce/openwebui-local (docker compose: Vchod = Caddy, Chat = Open WebUI, Brána = LiteLLM, Databáze = Postgres, Terminál = open-terminal; Poskytovatelé Anthropic a Google).
+const PROMPT_CONTEXT = `Pomáháš mi nasadit AI chat Školy Gaudi na server Hetzner. Kód je v soukromém repu github.com/PanLuce/gaudi-ai-chat (docker compose: Vchod = Caddy, Chat = Open WebUI, Brána = LiteLLM, Databáze = Postgres, Terminál = open-terminal; Poskytovatelé Anthropic a Google).
 Server mám v ~/.ssh/config jako gaudi-ai (uživatel gaudi) a gaudi-ai-root (root). Kód je na serveru v ~/openwebui-local.`;
 
 const PROMPT_RULES = `Pravidla:

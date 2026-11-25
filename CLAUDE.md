@@ -1,8 +1,9 @@
-# openwebui-local
+# gaudi-ai-chat
 
 Caddy + Open WebUI + LiteLLM + Postgres + open-terminal stack for Škola Gaudi staff (Vchod, Chat, Brána, Databáze, Terminál in the docs). See README.md for how to run it.
 
 ## Rules
+- The repo is `github.com/PanLuce/gaudi-ai-chat` (renamed from `openwebui-local`). Keep `name: openwebui-local` in `docker-compose.yml` and the server folder `~/openwebui-local`: the compose name prefixes the Docker volumes, so renaming it would start an empty database next to the real one.
 - Build only what production will run. No stand-ins (mock models, local IdP, self-signed CA); only `.env` values differ between local and production.
 - Documentation: ADRs yes (`docs/adr/`, only for hard-to-reverse, surprising trade-offs), no glossary.
 - Every provider call goes through LiteLLM; Open WebUI never talks to a provider directly.
