@@ -25,7 +25,7 @@ Podrobnosti jsou v hlavičce každého skriptu. Všechny kontroly jsou zdarma: �
 |---|---|
 | `scripts/bootstrap.sh` | Uvede stack do nakonfigurovaného stavu; lze spouštět opakovaně. |
 | `scripts/smoke.sh` | Ověří běžící stack přes porty, které používají lidé. Skutečnou odpověď a obrázek zkoušíš ručně (průvodce, krok Ověř, že vše funguje). |
-| `scripts/check-docs.sh` | Ověří `docs/` a README: odkazy, slovník názvů, žádná tajemství, úplné kroky průvodce. Potřebuje `node`, `gh` a běžící stack. |
+| `scripts/check-docs.sh` | Ověří `docs/` a README: odkazy, slovník názvů, žádná tajemství, úplné kroky průvodce. Potřebuje `node` a běžící stack. |
 | `scripts/check-bootstrap-secrets.sh` | Bootstrap na čerstvém `.env` vygeneruje všechna hesla a bez `WEBUI_ADMIN_EMAIL` se zastaví. |
 | `scripts/check-first-admin.sh` | Dočasný Chat s prázdnou databází: správce z `.env` se přihlásí, registrace je zavřená. |
 | `scripts/backup.sh` | Záloha databází a souborů Chatu do `backups/<čas>/`, drží posledních 14. |
@@ -42,6 +42,11 @@ Podrobnosti jsou v hlavičce každého skriptu. Všechny kontroly jsou zdarma: �
 |---|---|
 | Chat přes Vchod | `http://localhost` — jediný vstup; Chat sám žádný port na hostu nemá |
 | Brána (LiteLLM UI: útrata, klíče) | `http://127.0.0.1:4000/ui`, uživatel `admin`, heslo `LITELLM_UI_PASSWORD` v `.env` |
+
+## Licence
+
+Open source pod licencí MIT ([LICENSE](LICENSE)). Škola Gaudi projekt používá se souhlasem autora; na server se
+stahuje z tohoto veřejného repa bez klíče, nebo z forku školy (průvodce, krok Stáhni kód na server).
 
 ## Dokumenty
 

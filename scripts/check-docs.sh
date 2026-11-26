@@ -10,8 +10,8 @@ readonly PAGES="prehled.html nasazeni.html"
 readonly VOCABULARY="Vchod Chat Brána Databáze Terminál Poskytovatelé"
 # Exists only after deployment.
 readonly NOT_YET_DEPLOYED="ai.skolagaudi.cz"
-# Private: anonymous requests get 404, so ask GitHub as the signed-in user.
-readonly PRIVATE_REPO="github.com/PanLuce/gaudi-ai-chat"
+# Public (MIT): the server clones it anonymously over HTTPS; a school's fork works the same way.
+readonly CODE_REPO="github.com/PanLuce/gaudi-ai-chat"
 # The name before the rename: the repo, the compose project and the server folder all dropped it.
 readonly OLD_NAME="openwebui-local"
 
@@ -31,7 +31,6 @@ check_link() {
   local url=$1 page=$2 status
   case "$url" in
     *"$NOT_YET_DEPLOYED"*) info "$page: $url exists after deployment, skipped"; return ;;
-    *"$PRIVATE_REPO"*) gh repo view "${PRIVATE_REPO#github.com/}" >/dev/null 2>&1 || fail "$page: $url is not reachable with gh"; return ;;
   esac
   status=$(curl -s -o /dev/null -L --max-time 20 -A "Mozilla/5.0 (check-docs)" -w '%{http_code}' "$url" || true)
   case "$status" in
@@ -44,14 +43,14 @@ check_link() {
 # A renamed repo still redirects, so a stale name would pass the link check unnoticed.
 check_repo_name() {
   local stale
-  stale=$(grep -oE 'PanLuce/[A-Za-z0-9._-]+' "$REPO_ROOT/docs/$1" | sed 's/\.git$//' | sort -u | grep -vx "${PRIVATE_REPO#github.com/}" || true)
-  [ -z "$stale" ] || fail "docs/$1 names the repo as $stale, not ${PRIVATE_REPO#github.com/}"
+  stale=$(grep -oE 'PanLuce/[A-Za-z0-9._-]+' "$REPO_ROOT/docs/$1" | sed 's/\.git$//' | sort -u | grep -vx "${CODE_REPO#github.com/}" || true)
+  [ -z "$stale" ] || fail "docs/$1 names the repo as $stale, not ${CODE_REPO#github.com/}"
   ! grep -q "$OLD_NAME" "$REPO_ROOT/docs/$1" || fail "docs/$1 still uses the old name $OLD_NAME"
 }
 
 check_links() {
   local url
-  for url in $(grep -oE 'https?://[^"'"'"' <>)`]+' "$REPO_ROOT/docs/$1" | sed 's/[.,;:]$//' | sort -u); do
+  for url in $(grep -oE 'https?://[^"'"'"' <>)`}]+' "$REPO_ROOT/docs/$1" | sed 's/[.,;:]$//' | sort -u); do
     check_link "$url" "$1"
   done
 }
@@ -170,6 +169,32 @@ guide.STEPS.forEach((step, index) => {
 process.exit(failed ? 1 : 0);
 JS
   pass "docs/nasazeni.html: every phase lists all its steps"
+}
+
+# The code is public: the server clones it over HTTPS without a key, from the address the admin gives
+# (Enter = this repo), so a school's fork deploys the same way.
+check_guide_clones_public_repo() {
+  CODE_REPO_URL="https://$CODE_REPO.git" run_guide_check "docs/nasazeni.html: the guide does not clone the public repo" <<'JS'
+let failed = false;
+const report = (message) => { failed = true; console.error(`✗ ${message}`); };
+const clone = guide.STEPS.find((step) => step.title === "Stáhni kód na server");
+const url = process.env.CODE_REPO_URL;
+if (!clone) report("no step Stáhni kód na server");
+else {
+  if (!/read -r -p [^\n]*REPO_URL/.test(clone.command || "")) report("the clone step does not ask for the repo address (read -r -p … REPO_URL)");
+  if (!(clone.command || "").includes(`git clone "\${REPO_URL:-${url}}"`)) report(`the clone step does not default to ${url}`);
+}
+guide.STEPS.forEach((step, index) => {
+  if (/git@github\.com:|Deploy keys/.test(JSON.stringify(step))) report(`step ${index + 1} (${step.title}): still needs a key to read the code`);
+});
+process.exit(failed ? 1 : 0);
+JS
+  pass "docs/nasazeni.html: the server clones the public repo, or a fork, without a key"
+}
+
+check_license() {
+  grep -q '^MIT License' "$REPO_ROOT/LICENSE" 2>/dev/null || fail "LICENSE is missing or is not the MIT License"
+  pass "LICENSE: MIT"
 }
 
 # The overview's data (<script id="overview-data"> of docs/prehled.html), run in a sandbox like the guide's.
@@ -306,7 +331,7 @@ check_no_paid_checks() {
 }
 
 main() {
-  require_tools curl gh grep node
+  require_tools curl grep node
   local page
   for page in $PAGES; do
     check_page_exists "$page"
@@ -322,6 +347,8 @@ main() {
   check_guide_phase_steps
   check_overview_trip
   check_overview_counts_parts
+  check_guide_clones_public_repo
+  check_license
   check_guide_offsite_copy
   check_guide_matches_the_stack
   check_readme_restore_order
