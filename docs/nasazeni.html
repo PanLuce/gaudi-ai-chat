@@ -316,12 +316,12 @@ crontab -l`,
 
   { phase: "Údržba", title: "Aktualizace", short: "Aktualizace",
     why: "Jako servis auta: nejdřív záloha, pak výměna dílů, pak zkušební jízda.",
-    where: "Na serveru jako gaudi. Jednou za měsíc i systém serveru včetně Dockeru: ssh gaudi-ai-root 'apt-get update && apt-get upgrade -y'. Bezpečnostní opravy se instalují samy každou noc, ale restart ne: když druhý řádek vypíše balíčky, restartuj server ze svého počítače příkazem ssh gaudi-ai-root reboot, po minutě spusť scripts/smoke.sh.",
+    where: "Na serveru jako gaudi. Jednou za měsíc i systém serveru včetně Dockeru: ssh gaudi-ai-root 'apt-get update && apt-get upgrade -y'. Bezpečnostní opravy se instalují samy každou noc, ale restart ne: když výpis začne „čeká na restart“, restartuj server ze svého počítače příkazem ssh gaudi-ai-root reboot, po minutě spusť scripts/smoke.sh.",
     command: `cd ~/gaudi-ai-chat
-cat /var/run/reboot-required.pkgs 2>/dev/null || echo "restart není potřeba"
+if [ -f /var/run/reboot-required ]; then echo "čeká na restart:"; cat /var/run/reboot-required.pkgs 2>/dev/null || true; else echo "restart není potřeba"; fi
 ls -td backups/*/ | head -1
 scripts/backup.sh && git pull && scripts/bootstrap.sh && scripts/smoke.sh`,
-    see: "První řádek řekne, jestli server čeká na restart (seznam balíčků), nebo „restart není potřeba“. Další řádek je poslední noční záloha, pojmenovaná časem UTC (např. backups/20261127T023000Z/): když je starší než 24 h, noční záloha neběží (příčina je v backups/backup.log). Pak záloha, nová verze, samé ✓.",
+    see: "První výpis řekne „čeká na restart:“ (případně se seznamem balíčků), nebo „restart není potřeba“. Další řádek je poslední noční záloha, pojmenovaná časem UTC (např. backups/20261127T023000Z/): když je starší než 24 h, noční záloha neběží (příčina je v backups/backup.log). Pak záloha, nová verze, samé ✓.",
     guides: [
       { label: "Hetzner: zálohy a snímky serveru", url: "https://docs.hetzner.com/cloud/servers/backups-snapshots/overview" } ] },
 ];

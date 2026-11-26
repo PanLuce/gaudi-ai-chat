@@ -212,7 +212,8 @@ else {
   if (/Automatic-Reboot "true"|download\.docker\.com|Docker/.test(command)) report("the step reboots by itself or updates Docker, which stay manual");
 }
 const update = guide.STEPS[at("Aktualizace")];
-if (!update || !/reboot-required/.test(JSON.stringify(update))) report("the step Aktualizace does not show whether the server waits for a reboot");
+// Ubuntu always creates /var/run/reboot-required; the .pkgs list beside it is optional, so only the flag decides.
+if (!update || !/\[ -f \/var\/run\/reboot-required \]/.test(update.command || "")) report("the step Aktualizace does not test /var/run/reboot-required for a pending reboot");
 process.exit(failed ? 1 : 0);
 JS
   pass "docs/nasazeni.html: security fixes install every night; reboot and Docker stay in the monthly update"
