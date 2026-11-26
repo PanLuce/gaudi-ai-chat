@@ -31,8 +31,8 @@ Podrobnosti jsou v hlavičce každého skriptu. Všechny kontroly jsou zdarma: �
 | `scripts/backup.sh` | Záloha databází a souborů Chatu do `backups/<čas>/`, drží posledních 14. |
 | `scripts/restore.sh <adresář>` | Obnova ze zálohy; vše od zálohy se ztratí, aktuální stav se nejdřív uloží jako další záloha. |
 | `scripts/check-backup-restore.sh` | Záloha vrátí smazaný chat, soubor i útratu, poškozenou zálohu obnova odmítne. **Ne na serveru v provozu.** |
-| `scripts/offsite.sh upload \| list \| download <čas>` | Zašifrovaná kopie záloh na Google Drive, viz [Kopie mimo server](#kopie-mimo-server). |
-| `scripts/check-offsite.sh` | `offsite.sh` bez nastavení řekne, co doplnit; s nastavením Drive i cesta tam a zpět. |
+| `scripts/offsite.sh upload \| list \| download <čas>` | Zašifrovaná kopie záloh na Google Drive. **Zatím vypnuto (#8)**, viz [Kopie na Google Drive](#kopie-na-google-drive). |
+| `scripts/check-offsite.sh` | `offsite.sh` bez nastavení řekne, co doplnit; s nastavením Drive i cesta tam a zpět. **Zatím vypnuto (#8).** |
 | `scripts/demo-staff.sh` | Ruční ukázka: dočasný účet běžného uživatele (modely, terminál, obrázky); po Enteru se smaže. |
 | `scripts/demo-over-budget.sh` | Ruční ukázka: dočasný účet přes rozpočet; po Enteru se smaže. |
 
@@ -123,7 +123,15 @@ index; bez `cache/`) do `backups/<čas>/` (jen pro vlastníka, mimo git). Chat s
 (`backup.sh` vypíše `chat stopped for N s`), aby databáze a soubory byly ze stejné chvíle. Na serveru běží
 každou noc ve 2:30 UTC z cronu. `.env` v záloze není — kopie patří do správce hesel.
 
-### Kopie mimo server
+Zálohy zatím leží **jen na serveru**: když zmizí server, zmizí i ony (kopie na Google Drive je vypnutá, viz níže).
+**Obnova je na serveru zatím nevyzkoušená.** Průvodce (krok Zapni noční zálohu) proto doporučuje ji při nasazení
+zkusit, dokud v Chatu nejsou data lidí: `scripts/backup.sh`, `scripts/restore.sh` na nejnovější zálohu, `scripts/smoke.sh`.
+
+### Kopie na Google Drive
+
+**Zatím vypnutá:** proti skutečnému Google Drive se ještě neověřila (issue #8, ADR 0003), proto ji průvodce
+nezapíná a noční cron spouští jen `scripts/backup.sh`. Kód je připravený; zapnutí = krok v průvodci a
+`&& scripts/offsite.sh upload` v cronu. Až bude zapnutá, platí:
 
 Hned po noční záloze `scripts/offsite.sh upload` nahraje zálohu zašifrovanou (rclone `crypt`) na sdílený
 disk školy na Google Drive; drží se posledních 30 záloh (při výpadcích tedy pokryjí víc než 30 dní).
@@ -134,6 +142,8 @@ neobnoví** — patří do správce hesel spolu s celým `.env` a klíčem robot
 zastaví s větou, co doplnit; nikdy kopii tiše nepřeskočí.
 
 ### Obnova z Google Drive
+
+Platí, až bude kopie na Google Drive zapnutá (viz výše).
 
 Jen když server zmizel a chceš zpátky data (chaty, soubory, útratu). Čistý start bez dat je jiný postup:
 [Spuštění](#spuštění-lokálně) nebo průvodce — tam se bootstrap spouští hned a na zálohy nesahá.

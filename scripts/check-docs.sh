@@ -264,21 +264,24 @@ JS
   pass "docs/prehled.html: the person who asks stands before the picture; the lead counts only the system's parts"
 }
 
-check_guide_offsite_copy() {
-  run_guide_check "docs/nasazeni.html: the nightly backup does not reach Google Drive" <<'JS'
-// A backup that stays on the server dies with it: the nightly run must also copy it off the server.
-const nightly = guide.STEPS.find((step) => step.title === "Zapni noční zálohu");
-const offsite = guide.STEPS.find((step) => step.title === "Zálohy mimo server (Google Drive)");
+# The copy on Google Drive is off until it is verified against the real Drive (#8, ADR 0003): the nightly
+# backup stays on the server, and the guide says so, with the commands for a trial restore.
+check_guide_backup_stays_on_server() {
+  run_guide_check "docs/nasazeni.html: the backup does not stay on the server" <<'JS'
 let failed = false;
-if (!nightly || !/scripts\/backup\.sh && scripts\/offsite\.sh upload/.test(nightly.command || "")) {
-  failed = true; console.error("✗ the nightly crontab line does not run scripts/offsite.sh upload after the backup");
-}
-if (!offsite || !/scripts\/offsite\.sh upload/.test(offsite.command || "")) {
-  failed = true; console.error("✗ the step Zálohy mimo server is not ready or does not try an upload");
+const report = (message) => { failed = true; console.error(`✗ ${message}`); };
+const nightly = guide.STEPS.find((step) => step.title === "Zapni noční zálohu");
+if (!nightly || !/scripts\/backup\.sh/.test(nightly.command || "")) report("no nightly crontab line with scripts/backup.sh");
+guide.STEPS.forEach((step, index) => {
+  if (/scripts\/offsite\.sh/.test(step.command || "")) report(`step ${index + 1} (${step.title}): runs scripts/offsite.sh, which is off (#8)`);
+});
+const text = nightly ? [nightly.why, nightly.where, nightly.see].join(" ") : "";
+if (!/obnova[^.]*nevyzkoušen/i.test(text) || !/scripts\/restore\.sh/.test(text)) {
+  report("the nightly backup step does not warn that restore is untried, with the scripts/restore.sh commands");
 }
 process.exit(failed ? 1 : 0);
 JS
-  pass "docs/nasazeni.html: the nightly backup is copied to Google Drive"
+  pass "docs/nasazeni.html: the backup stays on the server; the guide warns that restore is untried"
 }
 
 # Sign-up is closed (WEBUI_ADMIN_EMAIL) until Google login (#3) lands in docker-compose.yml.
@@ -296,10 +299,10 @@ if (process.env.SIGNUP_OPEN !== "true") {
     }
   });
 }
-// The copy in the password manager must hold everything a restore on a new server needs.
-const saved = guide.STEPS[at("Ulož .env do správce hesel")], drive = at("Zálohy mimo server (Google Drive)");
-if (!saved || drive < 0 || at("Ulož .env do správce hesel") < drive || !/drive-backup\.json/.test(text(saved))) {
-  failed = true; console.error("✗ the .env copy in the password manager is made before the Drive settings, or without the Drive key");
+// The copy in the password manager is made once .env is complete, after the nightly backup; no Drive key (#8).
+const saved = guide.STEPS[at("Ulož .env do správce hesel")];
+if (!saved || at("Ulož .env do správce hesel") < at("Zapni noční zálohu") || /drive-backup\.json/.test(JSON.stringify(saved))) {
+  failed = true; console.error("✗ the .env copy in the password manager is made before the nightly backup, or still asks for the Drive key");
 }
 // Each provider has its own spending cap, set by the admin, behind the budgets in the Gateway.
 if (!guide.STEPS.some((step) => /Monthly spend cap/.test(text(step)))) {
@@ -307,7 +310,7 @@ if (!guide.STEPS.some((step) => /Monthly spend cap/.test(text(step)))) {
 }
 process.exit(failed ? 1 : 0);
 JS
-  pass "docs/nasazeni.html: the guide matches closed sign-up, the backup keys and the provider caps"
+  pass "docs/nasazeni.html: the guide matches closed sign-up, the .env copy and the provider caps"
 }
 
 # On a new server the old .env holds keys that exist only in the old databases, so bootstrap can run only
@@ -349,7 +352,7 @@ main() {
   check_overview_counts_parts
   check_guide_clones_public_repo
   check_license
-  check_guide_offsite_copy
+  check_guide_backup_stays_on_server
   check_guide_matches_the_stack
   check_readme_restore_order
   check_no_paid_checks
