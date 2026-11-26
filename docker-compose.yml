@@ -1,4 +1,4 @@
-name: openwebui-local
+name: gaudi-ai-chat
 
 x-logging: &default-logging
   driver: json-file
