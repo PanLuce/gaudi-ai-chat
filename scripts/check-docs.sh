@@ -192,6 +192,48 @@ JS
   pass "docs/nasazeni.html: the server clones the public repo, or a fork, without a key"
 }
 
+# Ubuntu's security fixes install themselves every night at 03:00 UTC, after the 02:30 backup. A reboot and
+# Docker stay with the admin's monthly update (#27: no automatic reboot, no Docker origin), so that step
+# shows whether the server waits for a reboot.
+check_guide_security_updates() {
+  run_guide_check "docs/nasazeni.html: the server does not install security fixes by itself" <<'JS'
+let failed = false;
+const report = (message) => { failed = true; console.error(`✗ ${message}`); };
+const at = (title) => guide.STEPS.findIndex((step) => step.title === title);
+const step = guide.STEPS[at("Zapni bezpečnostní aktualizace")];
+if (!step) report("no step Zapni bezpečnostní aktualizace");
+else {
+  if (at("Zapni bezpečnostní aktualizace") !== at("Nainstaluj Docker") + 1) report("the step does not follow Nainstaluj Docker");
+  if (!/gaudi-ai-root/.test(step.where)) report("the step does not run as root (ssh gaudi-ai-root)");
+  const command = step.command || "";
+  if (!/apt-get install -y unattended-upgrades/.test(command)) report("the step does not install unattended-upgrades");
+  if (!/20auto-upgrades/.test(command)) report("the step does not switch on the daily run (20auto-upgrades)");
+  if (!/OnCalendar=\*-\*-\* 03:00/.test(command)) report("the step does not move the run to 03:00 UTC, after the backup");
+  if (/Automatic-Reboot "true"|download\.docker\.com|Docker/.test(command)) report("the step reboots by itself or updates Docker, which stay manual");
+}
+const update = guide.STEPS[at("Aktualizace")];
+// Ubuntu always creates /var/run/reboot-required; the .pkgs list beside it is optional, so only the flag decides.
+if (!update || !/\[ -f \/var\/run\/reboot-required \]/.test(update.command || "")) report("the step Aktualizace does not test /var/run/reboot-required for a pending reboot");
+process.exit(failed ? 1 : 0);
+JS
+  pass "docs/nasazeni.html: security fixes install every night; reboot and Docker stay in the monthly update"
+}
+
+# Not a page, but the README's update section rests on it: Dependabot watches the images in
+# docker-compose.yml once a week, in one PR, and never offers a new Postgres major version (that needs a
+# dump and restore). Kept here until there is a second config check worth a script of its own.
+check_dependabot_watches_images() {
+  local config="$REPO_ROOT/.github/dependabot.yml"
+  [ -f "$config" ] || fail ".github/dependabot.yml is missing"
+  grep -q 'package-ecosystem: "docker-compose"' "$config" || fail "dependabot.yml does not watch docker-compose"
+  grep -q 'directory: "/"' "$config" || fail "dependabot.yml does not look at the repo root, where docker-compose.yml is"
+  grep -q 'interval: "weekly"' "$config" || fail "dependabot.yml does not run weekly"
+  grep -q 'patterns: \["\*"\]' "$config" || fail "dependabot.yml does not group all images into one PR"
+  grep -A1 'dependency-name: "postgres"' "$config" | grep -q 'version-update:semver-major' \
+    || fail "dependabot.yml would offer a new Postgres major version"
+  pass ".github/dependabot.yml: one weekly PR for the images, no new Postgres major version"
+}
+
 check_license() {
   grep -q '^MIT License' "$REPO_ROOT/LICENSE" 2>/dev/null || fail "LICENSE is missing or is not the MIT License"
   pass "LICENSE: MIT"
@@ -352,6 +394,8 @@ main() {
   check_overview_counts_parts
   check_guide_clones_public_repo
   check_license
+  check_guide_security_updates
+  check_dependabot_watches_images
   check_guide_backup_stays_on_server
   check_guide_matches_the_stack
   check_readme_restore_order
