@@ -219,9 +219,6 @@ JS
   pass "docs/nasazeni.html: security fixes install every night; reboot and Docker stay in the monthly update"
 }
 
-# Not a page, but the README's update section rests on it: Dependabot watches the images in
-# docker-compose.yml once a week, in one PR, and never offers a new Postgres major version (that needs a
-# dump and restore). Kept here until there is a second config check worth a script of its own.
 check_guide_prunes_images_after_smoke() {
   run_guide_check "docs/nasazeni.html: old images pile up on the server after updates" <<'JS'
 let failed = false;
@@ -238,6 +235,9 @@ JS
   pass "docs/nasazeni.html: the update removes old images only after a passing smoke, then shows free space"
 }
 
+# Not a page, but the README's update section rests on it: Dependabot watches the images in
+# docker-compose.yml once a week, in one PR, and never offers a new Postgres major version (that needs a
+# dump and restore). Kept here until there is a second config check worth a script of its own.
 check_dependabot_watches_images() {
   local config="$REPO_ROOT/.github/dependabot.yml"
   [ -f "$config" ] || fail ".github/dependabot.yml is missing"
