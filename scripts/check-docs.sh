@@ -12,6 +12,8 @@ readonly VOCABULARY="Vchod Chat Brána Databáze Terminál Poskytovatelé"
 readonly NOT_YET_DEPLOYED="ai.skolagaudi.cz"
 # Private: anonymous requests get 404, so ask GitHub as the signed-in user.
 readonly PRIVATE_REPO="github.com/PanLuce/gaudi-ai-chat"
+# The name before the rename: the repo, the compose project and the server folder all dropped it.
+readonly OLD_NAME="openwebui-local"
 
 check_page_exists() {
   [ -s "$REPO_ROOT/docs/$1" ] || fail "docs/$1 is missing"
@@ -44,6 +46,7 @@ check_repo_name() {
   local stale
   stale=$(grep -oE 'PanLuce/[A-Za-z0-9._-]+' "$REPO_ROOT/docs/$1" | sed 's/\.git$//' | sort -u | grep -vx "${PRIVATE_REPO#github.com/}" || true)
   [ -z "$stale" ] || fail "docs/$1 names the repo as $stale, not ${PRIVATE_REPO#github.com/}"
+  ! grep -q "$OLD_NAME" "$REPO_ROOT/docs/$1" || fail "docs/$1 still uses the old name $OLD_NAME"
 }
 
 check_links() {

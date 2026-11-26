@@ -223,8 +223,8 @@ cat ~/.ssh/github_deploy.pub`,
   { phase: "Kód", title: "Stáhni kód na server", short: "Stažení kódu",
     why: "Teď si server kód skutečně stáhne. Od té doby ho jen aktualizuješ.",
     where: "Na serveru jako gaudi: ssh gaudi-ai.",
-    command: `git clone git@github.com:PanLuce/gaudi-ai-chat.git ~/openwebui-local
-ls ~/openwebui-local/scripts`,
+    command: `git clone git@github.com:PanLuce/gaudi-ai-chat.git ~/gaudi-ai-chat
+ls ~/gaudi-ai-chat/scripts`,
     see: "Výpis skriptů: backup.sh, bootstrap.sh, smoke.sh a další.",
     guides: [
       { label: "Kód systému na GitHubu", url: "https://github.com/PanLuce/gaudi-ai-chat" } ] },
@@ -232,7 +232,7 @@ ls ~/openwebui-local/scripts`,
   { phase: "Hesla", title: "Vyplň .env", short: "Vyplnění .env", manual: true,
     why: "Soubor .env je trezor s klíči. Nové prostředí dostane nová hesla; ta, která jsou prázdná, vygeneruje bootstrap sám.",
     where: "Na serveru jako gaudi, sám (ne přes Claude). Příkaz sed zapíše nová hesla a adresu rovnou do souboru, nic nevypíše. V editoru nano pak vlož za rovnítko jen ANTHROPIC_API_KEY (Anthropic Console → workspace openwebui → API keys) a GEMINI_API_KEY (Google AI Studio → API keys). Ulož Ctrl+O, zavři Ctrl+X. OPENWEBUI_ADMIN_API_KEY nech prázdný.",
-    command: `cd ~/openwebui-local
+    command: `cd ~/gaudi-ai-chat
 cp .env.example .env && chmod 600 .env
 sed -i -e "s|^LITELLM_MASTER_KEY=.*|LITELLM_MASTER_KEY=sk-$(openssl rand -hex 24)|" -e "s|^OPEN_TERMINAL_API_KEY=.*|OPEN_TERMINAL_API_KEY=$(openssl rand -hex 24)|" -e "s|^WEBUI_URL=.*|WEBUI_URL=https://ai.skolagaudi.cz|" -e "s|^PUBLIC_BIND_ADDRESS=.*|PUBLIC_BIND_ADDRESS=0.0.0.0|" .env
 read -r -p "Tvůj školní e-mail (správce Chatu): " ADMIN_EMAIL
@@ -247,7 +247,7 @@ grep -cE '^ANTHROPIC_API_KEY=sk-ant-api|^GEMINI_API_KEY=AIza|^WEBUI_ADMIN_EMAIL=
   { phase: "Spuštění", title: "Spusť systém", short: "Spuštění",
     why: "Bootstrap je jako zapnutí školy ráno: odemkne, rozsvítí, vygeneruje chybějící hesla a pustí všechny části v pořadí, v jakém se potřebují.",
     where: "Na serveru jako gaudi.",
-    command: `cd ~/openwebui-local
+    command: `cd ~/gaudi-ai-chat
 scripts/bootstrap.sh
 curl --retry 10 --retry-delay 6 --retry-all-errors -sI https://ai.skolagaudi.cz/health | head -1`,
     see: "„✓ bootstrap done“ a poslední řádek HTTP/2 200. Vchod si při prvním spuštění vyřizuje HTTPS certifikát několik desítek sekund; poslední příkaz to zkouší až minutu. Bootstrap napíše, že přeskočil kroky správce, protože ještě nemá API klíč správce.",
@@ -257,9 +257,9 @@ curl --retry 10 --retry-delay 6 --retry-all-errors -sI https://ai.skolagaudi.cz/
   { phase: "Spuštění", title: "Přihlas se jako správce", short: "Správce", manual: true,
     why: "Účet správce Chatu založil systém sám při prvním startu z tvého e-mailu a hesla v .env, takže ho nikdo jiný nepředběhne a registrace je zavřená. Pozor, hesla jsou tři různá: správce Chatu (tady), Brána (krok Podívej se do Brány) a root na serveru (jen SSH klíč).",
     where: "V terminálu na svém počítači, sám (ne přes Claude): první příkaz ukáže heslo správce Chatu jen tobě. V prohlížeči na https://ai.skolagaudi.cz se přihlas svým e-mailem a tímto heslem. Pak Nastavení → Účet → API klíče → Vytvořit nový klíč. Na serveru ho vlož do .env za OPENWEBUI_ADMIN_API_KEY= a spusť bootstrap znovu.",
-    command: `ssh gaudi-ai "grep '^WEBUI_ADMIN_PASSWORD=' openwebui-local/.env | cut -d= -f2-"
+    command: `ssh gaudi-ai "grep '^WEBUI_ADMIN_PASSWORD=' gaudi-ai-chat/.env | cut -d= -f2-"
 ssh gaudi-ai
-cd ~/openwebui-local
+cd ~/gaudi-ai-chat
 nano .env
 scripts/bootstrap.sh`,
     see: "Přihlášení projde a vpravo dole jsi správce. Bootstrap tentokrát hlásí „Open WebUI connection points at LiteLLM“ a založení modelů. V Chatu vidíš Claude Haiku jako výchozí model.",
@@ -269,7 +269,7 @@ scripts/bootstrap.sh`,
   { phase: "Kontrola", title: "Ověř, že vše funguje", short: "Kontrola",
     why: "Kontrolní seznam před odletem. Skript ověří každou část zdarma, až k Bráně. Že poskytovatelé opravdu odpovídají, vyzkoušíš sám jednou zprávou a jedním obrázkem; stojí to pár centů.",
     where: "Příkaz na serveru jako gaudi. Pak v prohlížeči na https://ai.skolagaudi.cz jako správce: napiš Claude Haiku „ahoj“ a tlačítkem obrázku nech nakreslit jablko. Poskytovatelé musí mít kredit.",
-    command: `cd ~/openwebui-local
+    command: `cd ~/gaudi-ai-chat
 scripts/smoke.sh`,
     see: "Skript: samé ✓, žádné ✗ (když něco selže, řádek ✗ říká co). V prohlížeči: odpověď i obrázek. V Bráně (krok Podívej se do Brány → Customers) je u tvého e-mailu útrata v řádu centů.",
     guides: [
@@ -278,7 +278,7 @@ scripts/smoke.sh`,
   { phase: "Kontrola", title: "Podívej se do Brány", short: "Brána", manual: true,
     why: "Brána na internet nevidí. Podíváš se do ní tunelem: tvůj počítač si na chvíli půjčí její okénko.",
     where: "V terminálu na svém počítači, sám (ne přes Claude). První příkaz ukáže heslo do Brány jen tobě; druhý otevře tunel. Dokud tunel běží, otevři v prohlížeči http://127.0.0.1:4000/ui (uživatel admin, heslo z prvního příkazu).",
-    command: `ssh gaudi-ai "grep '^LITELLM_UI_PASSWORD=' openwebui-local/.env | cut -d= -f2-"
+    command: `ssh gaudi-ai "grep '^LITELLM_UI_PASSWORD=' gaudi-ai-chat/.env | cut -d= -f2-"
 ssh -N -L 4000:127.0.0.1:4000 gaudi-ai`,
     see: "Přihlašovací stránka LiteLLM. V sekci Customers je útrata podle e-mailů. Tunel zavřeš Ctrl+C.",
     guides: [
@@ -287,8 +287,8 @@ ssh -N -L 4000:127.0.0.1:4000 gaudi-ai`,
   { phase: "Zálohy", title: "Zapni noční zálohu", short: "Noční záloha",
     why: "Záloha je fotka všech dat. Každou noc se udělá nová a drží se posledních 14. Chat se na ni asi na 15 sekund zastaví, proto ve 2:30 času serveru (UTC, v Praze 3:30 nebo 4:30). Hned po ní se kopie zašifrovaná nahraje na Google Drive (nastavíš v kroku Zálohy mimo server; do té doby kopie v logu hlásí ✗).",
     where: "Na serveru jako gaudi. Druhý příkaz zapíše noční zálohu do crontabu; starší řádek se zálohou nahradí, takže tam je vždy jen jednou.",
-    command: `cd ~/openwebui-local && mkdir -p backups && scripts/backup.sh
-line='30 2 * * * cd /home/gaudi/openwebui-local && { scripts/backup.sh && scripts/offsite.sh upload; } >> backups/backup.log 2>&1'; (crontab -l 2>/dev/null | grep -vF 'scripts/backup.sh'; echo "$line") | crontab -
+    command: `cd ~/gaudi-ai-chat && mkdir -p backups && scripts/backup.sh
+line='30 2 * * * cd /home/gaudi/gaudi-ai-chat && { scripts/backup.sh && scripts/offsite.sh upload; } >> backups/backup.log 2>&1'; (crontab -l 2>/dev/null | grep -vF 'scripts/backup.sh'; echo "$line") | crontab -
 crontab -l`,
     see: "První příkaz končí „✓ backup complete“ a cestou ke složce. crontab -l ukáže nový řádek.",
     guides: [
@@ -297,11 +297,11 @@ crontab -l`,
   { phase: "Zálohy", title: "Zálohy mimo server (Google Drive)", short: "Mimo server", manual: true,
     why: "Kdyby server zmizel, zmizí i zálohy na něm. Každá noční záloha se proto zašifrovaná nahraje na sdílený disk školy a drží se posledních 30. Zapisuje tam robot (servisní účet), ne člověk, takže kopie přežijí i odchod kohokoli ze školy.",
     where: "Nejdřív požádej správce Google Workspace školy: (1) sdílený disk „AI chat – zálohy“; (2) v Google Cloud projekt se zapnutým Google Drive API a v něm servisní účet s klíčem JSON, pojmenovaným drive-backup.json; (3) e-mail servisního účtu přidat na sdílený disk jako Správce obsahu; (4) ID sdíleného disku (konec adresy disku v prohlížeči). Klíč si ulož do složky Stažené soubory; podrobný postup pro správce doplníme při nasazení. Pak v terminálu na svém počítači, sám (ne přes Claude): první dva příkazy přenesou klíč na server, ssh gaudi-ai otevře relaci na serveru a zbylé řádky patří do ní. Na dotaz vlož ID sdíleného disku.",
-    command: `ssh gaudi-ai 'mkdir -p -m 700 openwebui-local/secrets'
-scp ~/Downloads/drive-backup.json gaudi-ai:openwebui-local/secrets/drive-backup.json
+    command: `ssh gaudi-ai 'mkdir -p -m 700 gaudi-ai-chat/secrets'
+scp ~/Downloads/drive-backup.json gaudi-ai:gaudi-ai-chat/secrets/drive-backup.json
 ssh gaudi-ai
-cd ~/openwebui-local && chmod 600 secrets/drive-backup.json
-sed -i '/^OFFSITE_SERVICE_ACCOUNT_FILE=/d' .env && printf 'OFFSITE_SERVICE_ACCOUNT_FILE=%s\\n' "$HOME/openwebui-local/secrets/drive-backup.json" >> .env
+cd ~/gaudi-ai-chat && chmod 600 secrets/drive-backup.json
+sed -i '/^OFFSITE_SERVICE_ACCOUNT_FILE=/d' .env && printf 'OFFSITE_SERVICE_ACCOUNT_FILE=%s\\n' "$HOME/gaudi-ai-chat/secrets/drive-backup.json" >> .env
 read -r -p "ID sdíleného disku: " DRIVE_ID
 sed -i '/^OFFSITE_DRIVE_ID=/d' .env && printf 'OFFSITE_DRIVE_ID=%s\\n' "$DRIVE_ID" >> .env
 scripts/offsite.sh upload && scripts/offsite.sh list`,
@@ -316,7 +316,7 @@ scripts/offsite.sh upload && scripts/offsite.sh list`,
   { phase: "Zálohy", title: "Ulož .env do správce hesel", short: "Uložení .env", manual: true,
     why: "Záloha bez klíčů je trezor bez klíče. .env (s heslem k šifře záloh na Drive) ani klíč robota v záloze záměrně nejsou, takže jejich kopie musí být ve správci hesel. Proto až teď, kdy .env obsahuje i nastavení Drive.",
     where: "V terminálu na svém počítači, sám (ne přes Claude). Příkaz jen ukáže obsah souboru ze serveru, nic neukládá. Výpis zkopíruj do správce hesel jako bezpečnou poznámku a pak okno terminálu vyčisti (Cmd+K nebo příkaz clear). Do stejného záznamu přilož soubor drive-backup.json ze složky Stažené soubory. Druhý příkaz počká na tvůj Enter a teprve pak klíč z počítače smaže.",
-    command: `ssh gaudi-ai 'cat openwebui-local/.env'
+    command: `ssh gaudi-ai 'cat gaudi-ai-chat/.env'
 read -r -p 'Je .env i drive-backup.json ve správci hesel? Enter smaže klíč z tohoto počítače: ' && rm ~/Downloads/drive-backup.json`,
     see: "Ve správci hesel je záznam gaudi-ai .env s přílohou drive-backup.json. Na tvém počítači klíč robota už není.",
     guides: [
@@ -332,7 +332,7 @@ read -r -p 'Je .env i drive-backup.json ve správci hesel? Enter smaže klíč z
   { phase: "Údržba", title: "Aktualizace", short: "Aktualizace",
     why: "Jako servis auta: nejdřív záloha, pak výměna dílů, pak zkušební jízda.",
     where: "Na serveru jako gaudi. Jednou za měsíc i systém serveru: ssh gaudi-ai-root 'apt-get update && apt-get upgrade -y'.",
-    command: `cd ~/openwebui-local
+    command: `cd ~/gaudi-ai-chat
 scripts/backup.sh && git pull && scripts/bootstrap.sh && scripts/smoke.sh
 scripts/offsite.sh list`,
     see: "Záloha, nová verze, samé ✓. Poslední řádek ukáže nejnovější zálohu na Google Drive: víc než 24 h znamená, že se noční kopie nenahrává (příčina je v backups/backup.log).",
@@ -342,7 +342,7 @@ scripts/offsite.sh list`,
 
 // The prompt for Claude Code on the admin's computer: the step itself, plus the rules every step shares.
 const PROMPT_CONTEXT = `Pomáháš mi nasadit AI chat Školy Gaudi na server Hetzner. Kód je v soukromém repu github.com/PanLuce/gaudi-ai-chat (docker compose: Vchod = Caddy, Chat = Open WebUI, Brána = LiteLLM, Databáze = Postgres, Terminál = open-terminal; Poskytovatelé Anthropic a Google).
-Server mám v ~/.ssh/config jako gaudi-ai (uživatel gaudi) a gaudi-ai-root (root). Kód je na serveru v ~/openwebui-local.`;
+Server mám v ~/.ssh/config jako gaudi-ai (uživatel gaudi) a gaudi-ai-root (root). Kód je na serveru v ~/gaudi-ai-chat.`;
 
 const PROMPT_RULES = `Pravidla:
 - Nikdy nevypisuj obsah .env ani žádný klíč či heslo. Když je potřeba hodnota, řekni mi, kde ji najdu, a nech mě ji vložit.
