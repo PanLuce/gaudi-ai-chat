@@ -218,6 +218,21 @@ JS
   pass "docs/nasazeni.html: security fixes install every night; reboot and Docker stay in the monthly update"
 }
 
+# Not a page, but the README's update section rests on it: Dependabot watches the images in
+# docker-compose.yml once a week, in one PR, and never offers a new Postgres major version (that needs a
+# dump and restore). Kept here until there is a second config check worth a script of its own.
+check_dependabot_watches_images() {
+  local config="$REPO_ROOT/.github/dependabot.yml"
+  [ -f "$config" ] || fail ".github/dependabot.yml is missing"
+  grep -q 'package-ecosystem: "docker-compose"' "$config" || fail "dependabot.yml does not watch docker-compose"
+  grep -q 'directory: "/"' "$config" || fail "dependabot.yml does not look at the repo root, where docker-compose.yml is"
+  grep -q 'interval: "weekly"' "$config" || fail "dependabot.yml does not run weekly"
+  grep -q 'patterns: \["\*"\]' "$config" || fail "dependabot.yml does not group all images into one PR"
+  grep -A1 'dependency-name: "postgres"' "$config" | grep -q 'version-update:semver-major' \
+    || fail "dependabot.yml would offer a new Postgres major version"
+  pass ".github/dependabot.yml: one weekly PR for the images, no new Postgres major version"
+}
+
 check_license() {
   grep -q '^MIT License' "$REPO_ROOT/LICENSE" 2>/dev/null || fail "LICENSE is missing or is not the MIT License"
   pass "LICENSE: MIT"
@@ -379,6 +394,7 @@ main() {
   check_guide_clones_public_repo
   check_license
   check_guide_security_updates
+  check_dependabot_watches_images
   check_guide_backup_stays_on_server
   check_guide_matches_the_stack
   check_readme_restore_order

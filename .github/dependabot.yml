@@ -1,0 +1,14 @@
+# One PR a week with new versions of the images in docker-compose.yml (README, Nové verze obrazů).
+version: 2
+updates:
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      images:
+        patterns: ["*"]
+    ignore:
+      # A new Postgres major version needs a dump and restore of the data, not a version bump.
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]

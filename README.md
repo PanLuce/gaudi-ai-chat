@@ -110,6 +110,22 @@ Hodnoty pro server jsou v průvodci (krok Vyplň .env).
 nemá žádná pravidla přístupu, což Chat chápe jako „jen správce“. Kdo další ho smí používat, je konfigurace
 správce v Chatu a bootstrap ji nepřepisuje. Co vidí běžný uživatel: `scripts/demo-staff.sh`.
 
+## Nové verze obrazů
+
+Verze obrazů v `docker-compose.yml` jsou pevné. Jednou týdně pošle Dependabot (`.github/dependabot.yml`) jeden PR
+se všemi novými verzemi; novou hlavní verzi Postgresu nenabízí, protože ta potřebuje převod dat. CI zatím
+není (#30), PR se ověří ručně:
+
+```sh
+gh pr checkout <číslo PR>
+scripts/bootstrap.sh
+scripts/smoke.sh        # samé ✓, pak merge
+git switch main
+```
+
+Merge nic nenasadí. Na server se nová verze dostane krokem Aktualizace v průvodci (záloha → `git pull` →
+bootstrap → smoke).
+
 ## Nároky na server
 
 Naměřeno 12. 11. 2026 na běžícím stacku (`docker stats --no-stream`): Chat 712 MB, Brána 611 MB,
