@@ -5,6 +5,9 @@ Caddy + Open WebUI + LiteLLM + Postgres + open-terminal stack for Škola Gaudi s
 ## Rules
 - Build only what production will run. No stand-ins (mock models, local IdP, self-signed CA); only `.env` values differ between local and production.
 - Documentation: ADRs yes (`docs/adr/`, only for hard-to-reverse, surprising trade-offs), no glossary.
+- The pages in `docs/` are also published as private claude.ai artifacts. After any change to a page, republish it to the same URL (Artifact tool, `url`), never as a new artifact, and open it for the user:
+  - `docs/prehled.html` → https://claude.ai/artifact/N8kqUL2LN2y4uSnMTossTx
+  - `docs/nasazeni.html` → https://claude.ai/artifact/RbKNNrMgdC7W3TE2jzzdwb
 - Every provider call goes through LiteLLM; Open WebUI never talks to a provider directly.
 - The Anthropic key must be created inside the `openwebui` workspace in console.anthropic.com: keys outside a workspace are rejected (LiteLLM sends no `anthropic-workspace-id`), and the workspace carries the provider-side spend limit.
 - Open WebUI stores its config in its database after the first start, so env vars only seed a fresh database. Change live settings through `scripts/bootstrap.sh` (admin API), not by editing `docker-compose.yml` alone.
