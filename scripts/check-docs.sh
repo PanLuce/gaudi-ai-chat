@@ -192,6 +192,32 @@ JS
   pass "docs/nasazeni.html: the server clones the public repo, or a fork, without a key"
 }
 
+# Ubuntu's security fixes install themselves every night at 03:00 UTC, after the 02:30 backup. A reboot and
+# Docker stay with the admin's monthly update (#27: no automatic reboot, no Docker origin), so that step
+# shows whether the server waits for a reboot.
+check_guide_security_updates() {
+  run_guide_check "docs/nasazeni.html: the server does not install security fixes by itself" <<'JS'
+let failed = false;
+const report = (message) => { failed = true; console.error(`✗ ${message}`); };
+const at = (title) => guide.STEPS.findIndex((step) => step.title === title);
+const step = guide.STEPS[at("Zapni bezpečnostní aktualizace")];
+if (!step) report("no step Zapni bezpečnostní aktualizace");
+else {
+  if (at("Zapni bezpečnostní aktualizace") !== at("Nainstaluj Docker") + 1) report("the step does not follow Nainstaluj Docker");
+  if (!/gaudi-ai-root/.test(step.where)) report("the step does not run as root (ssh gaudi-ai-root)");
+  const command = step.command || "";
+  if (!/apt-get install -y unattended-upgrades/.test(command)) report("the step does not install unattended-upgrades");
+  if (!/20auto-upgrades/.test(command)) report("the step does not switch on the daily run (20auto-upgrades)");
+  if (!/OnCalendar=\*-\*-\* 03:00/.test(command)) report("the step does not move the run to 03:00 UTC, after the backup");
+  if (/Automatic-Reboot "true"|download\.docker\.com|Docker/.test(command)) report("the step reboots by itself or updates Docker, which stay manual");
+}
+const update = guide.STEPS[at("Aktualizace")];
+if (!update || !/reboot-required/.test(JSON.stringify(update))) report("the step Aktualizace does not show whether the server waits for a reboot");
+process.exit(failed ? 1 : 0);
+JS
+  pass "docs/nasazeni.html: security fixes install every night; reboot and Docker stay in the monthly update"
+}
+
 check_license() {
   grep -q '^MIT License' "$REPO_ROOT/LICENSE" 2>/dev/null || fail "LICENSE is missing or is not the MIT License"
   pass "LICENSE: MIT"
@@ -352,6 +378,7 @@ main() {
   check_overview_counts_parts
   check_guide_clones_public_repo
   check_license
+  check_guide_security_updates
   check_guide_backup_stays_on_server
   check_guide_matches_the_stack
   check_readme_restore_order

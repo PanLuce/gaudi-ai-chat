@@ -198,6 +198,21 @@ docker compose version`,
     guides: [
       { label: "Docker: Install Docker Engine on Ubuntu", url: "https://docs.docker.com/engine/install/ubuntu/" } ] },
 
+  { phase: "Příprava serveru", title: "Zapni bezpečnostní aktualizace", short: "Bezpečnostní aktualizace",
+    why: "Jako hlídač, který v noci sám vymění rozbitý zámek: bezpečnostní opravy Ubuntu se nainstalují každou noc ve 03:00 UTC, po noční záloze. Server se při tom sám nerestartuje a Docker nechává být; obojí patří do měsíční Aktualizace.",
+    where: "Na serveru jako root: ssh gaudi-ai-root. Nastavení je jen pro bezpečnostní zdroje Ubuntu (výchozí stav unattended-upgrades) a bez automatického restartu.",
+    command: `apt-get install -y unattended-upgrades
+printf 'APT::Periodic::Update-Package-Lists "1";\\nAPT::Periodic::Unattended-Upgrade "1";\\n' > /etc/apt/apt.conf.d/20auto-upgrades
+mkdir -p /etc/systemd/system/apt-daily-upgrade.timer.d
+printf '[Timer]\\nOnCalendar=\\nOnCalendar=*-*-* 03:00\\nRandomizedDelaySec=0\\n' > /etc/systemd/system/apt-daily-upgrade.timer.d/override.conf
+systemctl daemon-reload && systemctl restart apt-daily-upgrade.timer
+systemctl list-timers apt-daily-upgrade.timer
+unattended-upgrade --dry-run && echo "dry-run ok"`,
+    see: "systemctl list-timers ukáže u apt-daily-upgrade.timer příští běh (NEXT) zítra v 03:00:00 UTC. Poslední řádek: dry-run ok.",
+    guides: [
+      { label: "Ubuntu: automatické aktualizace", url: "https://documentation.ubuntu.com/server/how-to/software/automatic-updates/" },
+      { label: "systemd: časovače (OnCalendar)", url: "https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html" } ] },
+
   { phase: "Příprava serveru", title: "Založ uživatele gaudi", short: "Uživatel gaudi",
     why: "Na serveru nebudeš běžně pracovat jako root (správce všeho). Pozor: kdo smí ovládat Docker, má přes něj prakticky stejná práva jako root. Uživatel gaudi je oddělený hlavně proto, aby běžná práce nešla přes root a překlep v příkazu nerozbil systém.",
     where: "Na serveru jako root: ssh gaudi-ai-root.",
@@ -301,11 +316,12 @@ crontab -l`,
 
   { phase: "Údržba", title: "Aktualizace", short: "Aktualizace",
     why: "Jako servis auta: nejdřív záloha, pak výměna dílů, pak zkušební jízda.",
-    where: "Na serveru jako gaudi. Jednou za měsíc i systém serveru: ssh gaudi-ai-root 'apt-get update && apt-get upgrade -y'.",
+    where: "Na serveru jako gaudi. Jednou za měsíc i systém serveru včetně Dockeru: ssh gaudi-ai-root 'apt-get update && apt-get upgrade -y'. Bezpečnostní opravy se instalují samy každou noc, ale restart ne: když druhý řádek vypíše balíčky, restartuj server ze svého počítače příkazem ssh gaudi-ai-root reboot, po minutě spusť scripts/smoke.sh.",
     command: `cd ~/gaudi-ai-chat
+cat /var/run/reboot-required.pkgs 2>/dev/null || echo "restart není potřeba"
 ls -td backups/*/ | head -1
 scripts/backup.sh && git pull && scripts/bootstrap.sh && scripts/smoke.sh`,
-    see: "První řádek je poslední noční záloha, pojmenovaná časem UTC (např. backups/20261127T023000Z/): když je starší než 24 h, noční záloha neběží (příčina je v backups/backup.log). Pak záloha, nová verze, samé ✓.",
+    see: "První řádek řekne, jestli server čeká na restart (seznam balíčků), nebo „restart není potřeba“. Další řádek je poslední noční záloha, pojmenovaná časem UTC (např. backups/20261127T023000Z/): když je starší než 24 h, noční záloha neběží (příčina je v backups/backup.log). Pak záloha, nová verze, samé ✓.",
     guides: [
       { label: "Hetzner: zálohy a snímky serveru", url: "https://docs.hetzner.com/cloud/servers/backups-snapshots/overview" } ] },
 ];
