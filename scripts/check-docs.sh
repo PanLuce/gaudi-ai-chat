@@ -10,8 +10,8 @@ readonly PAGES="prehled.html nasazeni.html"
 readonly VOCABULARY="Vchod Chat Brána Databáze Terminál Poskytovatelé"
 # Exists only after deployment.
 readonly NOT_YET_DEPLOYED="ai.skolagaudi.cz"
-# Private: anonymous requests get 404, so ask GitHub as the signed-in user.
-readonly PRIVATE_REPO="github.com/PanLuce/gaudi-ai-chat"
+# Public (MIT): the server clones it anonymously over HTTPS; a school's fork works the same way.
+readonly CODE_REPO="github.com/PanLuce/gaudi-ai-chat"
 # The name before the rename: the repo, the compose project and the server folder all dropped it.
 readonly OLD_NAME="openwebui-local"
 
@@ -31,7 +31,6 @@ check_link() {
   local url=$1 page=$2 status
   case "$url" in
     *"$NOT_YET_DEPLOYED"*) info "$page: $url exists after deployment, skipped"; return ;;
-    *"$PRIVATE_REPO"*) gh repo view "${PRIVATE_REPO#github.com/}" >/dev/null 2>&1 || fail "$page: $url is not reachable with gh"; return ;;
   esac
   status=$(curl -s -o /dev/null -L --max-time 20 -A "Mozilla/5.0 (check-docs)" -w '%{http_code}' "$url" || true)
   case "$status" in
@@ -44,14 +43,14 @@ check_link() {
 # A renamed repo still redirects, so a stale name would pass the link check unnoticed.
 check_repo_name() {
   local stale
-  stale=$(grep -oE 'PanLuce/[A-Za-z0-9._-]+' "$REPO_ROOT/docs/$1" | sed 's/\.git$//' | sort -u | grep -vx "${PRIVATE_REPO#github.com/}" || true)
-  [ -z "$stale" ] || fail "docs/$1 names the repo as $stale, not ${PRIVATE_REPO#github.com/}"
+  stale=$(grep -oE 'PanLuce/[A-Za-z0-9._-]+' "$REPO_ROOT/docs/$1" | sed 's/\.git$//' | sort -u | grep -vx "${CODE_REPO#github.com/}" || true)
+  [ -z "$stale" ] || fail "docs/$1 names the repo as $stale, not ${CODE_REPO#github.com/}"
   ! grep -q "$OLD_NAME" "$REPO_ROOT/docs/$1" || fail "docs/$1 still uses the old name $OLD_NAME"
 }
 
 check_links() {
   local url
-  for url in $(grep -oE 'https?://[^"'"'"' <>)`]+' "$REPO_ROOT/docs/$1" | sed 's/[.,;:]$//' | sort -u); do
+  for url in $(grep -oE 'https?://[^"'"'"' <>)`}]+' "$REPO_ROOT/docs/$1" | sed 's/[.,;:]$//' | sort -u); do
     check_link "$url" "$1"
   done
 }
@@ -172,6 +171,32 @@ JS
   pass "docs/nasazeni.html: every phase lists all its steps"
 }
 
+# The code is public: the server clones it over HTTPS without a key, from the address the admin gives
+# (Enter = this repo), so a school's fork deploys the same way.
+check_guide_clones_public_repo() {
+  CODE_REPO_URL="https://$CODE_REPO.git" run_guide_check "docs/nasazeni.html: the guide does not clone the public repo" <<'JS'
+let failed = false;
+const report = (message) => { failed = true; console.error(`✗ ${message}`); };
+const clone = guide.STEPS.find((step) => step.title === "Stáhni kód na server");
+const url = process.env.CODE_REPO_URL;
+if (!clone) report("no step Stáhni kód na server");
+else {
+  if (!/read -r -p [^\n]*REPO_URL/.test(clone.command || "")) report("the clone step does not ask for the repo address (read -r -p … REPO_URL)");
+  if (!(clone.command || "").includes(`git clone "\${REPO_URL:-${url}}"`)) report(`the clone step does not default to ${url}`);
+}
+guide.STEPS.forEach((step, index) => {
+  if (/git@github\.com:|Deploy keys/.test(JSON.stringify(step))) report(`step ${index + 1} (${step.title}): still needs a key to read the code`);
+});
+process.exit(failed ? 1 : 0);
+JS
+  pass "docs/nasazeni.html: the server clones the public repo, or a fork, without a key"
+}
+
+check_license() {
+  grep -q '^MIT License' "$REPO_ROOT/LICENSE" 2>/dev/null || fail "LICENSE is missing or is not the MIT License"
+  pass "LICENSE: MIT"
+}
+
 # The overview's data (<script id="overview-data"> of docs/prehled.html), run in a sandbox like the guide's.
 readonly OVERVIEW_LOADER='const fs = require("fs"), vm = require("vm");
 const html = fs.readFileSync(process.argv[2], "utf8");
@@ -239,21 +264,24 @@ JS
   pass "docs/prehled.html: the person who asks stands before the picture; the lead counts only the system's parts"
 }
 
-check_guide_offsite_copy() {
-  run_guide_check "docs/nasazeni.html: the nightly backup does not reach Google Drive" <<'JS'
-// A backup that stays on the server dies with it: the nightly run must also copy it off the server.
-const nightly = guide.STEPS.find((step) => step.title === "Zapni noční zálohu");
-const offsite = guide.STEPS.find((step) => step.title === "Zálohy mimo server (Google Drive)");
+# The copy on Google Drive is off until it is verified against the real Drive (#8, ADR 0003): the nightly
+# backup stays on the server, and the guide says so, with the commands for a trial restore.
+check_guide_backup_stays_on_server() {
+  run_guide_check "docs/nasazeni.html: the backup does not stay on the server" <<'JS'
 let failed = false;
-if (!nightly || !/scripts\/backup\.sh && scripts\/offsite\.sh upload/.test(nightly.command || "")) {
-  failed = true; console.error("✗ the nightly crontab line does not run scripts/offsite.sh upload after the backup");
-}
-if (!offsite || !/scripts\/offsite\.sh upload/.test(offsite.command || "")) {
-  failed = true; console.error("✗ the step Zálohy mimo server is not ready or does not try an upload");
+const report = (message) => { failed = true; console.error(`✗ ${message}`); };
+const nightly = guide.STEPS.find((step) => step.title === "Zapni noční zálohu");
+if (!nightly || !/scripts\/backup\.sh/.test(nightly.command || "")) report("no nightly crontab line with scripts/backup.sh");
+guide.STEPS.forEach((step, index) => {
+  if (/scripts\/offsite\.sh/.test(step.command || "")) report(`step ${index + 1} (${step.title}): runs scripts/offsite.sh, which is off (#8)`);
+});
+const text = nightly ? [nightly.why, nightly.where, nightly.see].join(" ") : "";
+if (!/obnova[^.]*nevyzkoušen/i.test(text) || !/scripts\/restore\.sh/.test(text)) {
+  report("the nightly backup step does not warn that restore is untried, with the scripts/restore.sh commands");
 }
 process.exit(failed ? 1 : 0);
 JS
-  pass "docs/nasazeni.html: the nightly backup is copied to Google Drive"
+  pass "docs/nasazeni.html: the backup stays on the server; the guide warns that restore is untried"
 }
 
 # Sign-up is closed (WEBUI_ADMIN_EMAIL) until Google login (#3) lands in docker-compose.yml.
@@ -271,10 +299,10 @@ if (process.env.SIGNUP_OPEN !== "true") {
     }
   });
 }
-// The copy in the password manager must hold everything a restore on a new server needs.
-const saved = guide.STEPS[at("Ulož .env do správce hesel")], drive = at("Zálohy mimo server (Google Drive)");
-if (!saved || drive < 0 || at("Ulož .env do správce hesel") < drive || !/drive-backup\.json/.test(text(saved))) {
-  failed = true; console.error("✗ the .env copy in the password manager is made before the Drive settings, or without the Drive key");
+// The copy in the password manager is made once .env is complete, after the nightly backup; no Drive key (#8).
+const saved = guide.STEPS[at("Ulož .env do správce hesel")];
+if (!saved || at("Ulož .env do správce hesel") < at("Zapni noční zálohu") || /drive-backup\.json/.test(JSON.stringify(saved))) {
+  failed = true; console.error("✗ the .env copy in the password manager is made before the nightly backup, or still asks for the Drive key");
 }
 // Each provider has its own spending cap, set by the admin, behind the budgets in the Gateway.
 if (!guide.STEPS.some((step) => /Monthly spend cap/.test(text(step)))) {
@@ -282,7 +310,7 @@ if (!guide.STEPS.some((step) => /Monthly spend cap/.test(text(step)))) {
 }
 process.exit(failed ? 1 : 0);
 JS
-  pass "docs/nasazeni.html: the guide matches closed sign-up, the backup keys and the provider caps"
+  pass "docs/nasazeni.html: the guide matches closed sign-up, the .env copy and the provider caps"
 }
 
 # On a new server the old .env holds keys that exist only in the old databases, so bootstrap can run only
@@ -306,7 +334,7 @@ check_no_paid_checks() {
 }
 
 main() {
-  require_tools curl gh grep node
+  require_tools curl grep node
   local page
   for page in $PAGES; do
     check_page_exists "$page"
@@ -322,7 +350,9 @@ main() {
   check_guide_phase_steps
   check_overview_trip
   check_overview_counts_parts
-  check_guide_offsite_copy
+  check_guide_clones_public_repo
+  check_license
+  check_guide_backup_stays_on_server
   check_guide_matches_the_stack
   check_readme_restore_order
   check_no_paid_checks

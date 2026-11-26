@@ -1,6 +1,8 @@
 # 0003 — Zálohy mimo server: servisní účet, sdílený disk, šifrování
 
-**Stav:** přijato, 2026-11-12 (proti skutečnému Google Drive ověří až nasazení, issue #8)
+**Stav:** přijato, 2026-11-12; **odloženo 2026-11-26**: kopie na Google Drive je v průvodci a v cronu vypnutá, dokud se
+neověří proti skutečnému Drive (issue #8). Kód (`scripts/offsite.sh`) zůstává připravený. Riziko: správce Workspace
+nemusí smět vytvořit klíč servisního účtu (politika organizace `iam.disableServiceAccountKeyCreation`).
 
 ## Kontext
 Noční záloha leží na serveru; když zmizí server, zmizí i ona. Škola má Google Workspace, takže kopie
