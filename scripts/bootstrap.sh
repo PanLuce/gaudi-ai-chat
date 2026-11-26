@@ -156,9 +156,9 @@ sync_openwebui_image_generation() {
 # Address and key of the terminal come from the deployment; who may use it is the connection's
 # access rules. A new connection has none, which Open WebUI treats as administrators only.
 sync_openwebui_terminal() {
-  update_openwebui_config /api/v1/configs/terminal_servers /api/v1/configs/terminal_servers \
+  update_openwebui_config /api/v1/configs/machines /api/v1/configs/machines \
     --arg id "$TERMINAL_ID" --arg key "$OPEN_TERMINAL_API_KEY" '
-      .TERMINAL_SERVER_CONNECTIONS |= (
+      .MACHINE_CONNECTIONS |= (
         (map(select(.id == $id)) | first // {config: {}}) as $current
         | map(select(.id != $id))
         + [$current + {id: $id, name: "Terminál serveru", enabled: true,

@@ -67,9 +67,9 @@ check_openwebui_knows_its_public_address() {
 # Who else may use the terminal is the admin's configuration; the admin must always have it.
 check_admin_runs_commands_in_the_terminal() {
   local terminals output
-  terminals=$(openwebui_admin GET /api/v1/terminals/ | jq -r '.[].id' | xargs)
+  terminals=$(openwebui_admin GET /api/v1/machines/ | jq -r '.[].id' | xargs)
   grep -qw -- "$TERMINAL_ID" <<<"$terminals" || fail "admin does not see the terminal $TERMINAL_ID (sees: [$terminals])"
-  output=$(openwebui_admin POST "/api/v1/terminals/$TERMINAL_ID/execute?wait=10" "$TERMINAL_COMMAND" 2>&1 || true)
+  output=$(openwebui_admin POST "/api/v1/machines/$TERMINAL_ID/execute?wait=10" "$TERMINAL_COMMAND" 2>&1 || true)
   grep -q "smoke-terminal-ok" <<<"$output" || fail "admin cannot run a command in the terminal: $(head -c 300 <<<"$output")"
   pass "an admin runs commands in the terminal through Open WebUI"
 }
