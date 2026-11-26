@@ -219,6 +219,22 @@ JS
   pass "docs/nasazeni.html: security fixes install every night; reboot and Docker stay in the monthly update"
 }
 
+check_guide_prunes_images_after_smoke() {
+  run_guide_check "docs/nasazeni.html: old images pile up on the server after updates" <<'JS'
+let failed = false;
+const report = (message) => { failed = true; console.error(`✗ ${message}`); };
+const update = guide.STEPS.find((step) => step.title === "Aktualizace");
+const command = (update && update.command) || "";
+// Only after a passing smoke: a failed update keeps the old images to go back to.
+if (!/scripts\/smoke\.sh && docker image prune -a -f/.test(command)) report("the step Aktualizace does not remove old images right after a passing smoke");
+if (!/^df -h \/$/m.test(command)) report("the step Aktualizace does not show the free disk space (df -h /)");
+const elsewhere = guide.STEPS.filter((step) => step !== update && /prune/.test(step.command || ""));
+if (elsewhere.length) report(`images are pruned outside Aktualizace, without a smoke first: ${elsewhere.map((step) => step.title).join(", ")}`);
+process.exit(failed ? 1 : 0);
+JS
+  pass "docs/nasazeni.html: the update removes old images only after a passing smoke, then shows free space"
+}
+
 # Not a page, but the README's update section rests on it: Dependabot watches the images in
 # docker-compose.yml once a week, in one PR, and never offers a new Postgres major version (that needs a
 # dump and restore). Kept here until there is a second config check worth a script of its own.
@@ -395,6 +411,7 @@ main() {
   check_guide_clones_public_repo
   check_license
   check_guide_security_updates
+  check_guide_prunes_images_after_smoke
   check_dependabot_watches_images
   check_guide_backup_stays_on_server
   check_guide_matches_the_stack

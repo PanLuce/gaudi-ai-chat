@@ -315,13 +315,14 @@ crontab -l`,
       { label: "Open WebUI: dokumentace", url: "https://docs.openwebui.com/" } ] },
 
   { phase: "Údržba", title: "Aktualizace", short: "Aktualizace",
-    why: "Jako servis auta: nejdřív záloha, pak výměna dílů, pak zkušební jízda.",
+    why: "Jako servis auta: nejdřív záloha, pak výměna dílů, pak zkušební jízda. Staré díly se vyhodí, až když zkušební jízda projde; jinak by stará verze obrazů zůstala na disku a ten by se po pár aktualizacích zaplnil.",
     where: "Na serveru jako gaudi. Jednou za měsíc i systém serveru včetně Dockeru: ssh gaudi-ai-root 'apt-get update && apt-get upgrade -y'. Bezpečnostní opravy se instalují samy každou noc, ale restart ne: když výpis začne „čeká na restart“, restartuj server ze svého počítače příkazem ssh gaudi-ai-root reboot, po minutě spusť scripts/smoke.sh.",
     command: `cd ~/gaudi-ai-chat
 if [ -f /var/run/reboot-required ]; then echo "čeká na restart:"; cat /var/run/reboot-required.pkgs 2>/dev/null || true; else echo "restart není potřeba"; fi
 ls -td backups/*/ | head -1
-scripts/backup.sh && git pull && scripts/bootstrap.sh && scripts/smoke.sh`,
-    see: "První výpis řekne „čeká na restart:“ (případně se seznamem balíčků), nebo „restart není potřeba“. Další řádek je poslední noční záloha, pojmenovaná časem UTC (např. backups/20261127T023000Z/): když je starší než 24 h, noční záloha neběží (příčina je v backups/backup.log). Pak záloha, nová verze, samé ✓.",
+scripts/backup.sh && git pull && scripts/bootstrap.sh && scripts/smoke.sh && docker image prune -a -f
+df -h /`,
+    see: "První výpis řekne „čeká na restart:“ (případně se seznamem balíčků), nebo „restart není potřeba“. Další řádek je poslední noční záloha, pojmenovaná časem UTC (např. backups/20261127T023000Z/): když je starší než 24 h, noční záloha neběží (příčina je v backups/backup.log). Pak záloha, nová verze, samé ✓. Teprve po nich se smažou staré obrazy a df -h / ukáže volné místo ve sloupci Avail. Když je ho méně než 20 GB, příští aktualizace nemusí mít kam stáhnout nové obrazy: docker system df ukáže, co místo zabírá, a disk serveru se dá zvětšit v Hetzner Console.",
     guides: [
       { label: "Hetzner: zálohy a snímky serveru", url: "https://docs.hetzner.com/cloud/servers/backups-snapshots/overview" } ] },
 ];

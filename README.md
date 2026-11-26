@@ -124,7 +124,9 @@ git switch main
 ```
 
 Merge nic nenasadí. Na server se nová verze dostane krokem Aktualizace v průvodci (záloha → `git pull` →
-bootstrap → smoke).
+bootstrap → smoke → úklid starých obrazů). Úklid (`docker image prune -a -f`) běží jen po samých ✓, takže po
+nepovedené aktualizaci staré obrazy zůstanou. Lokálně `prune -a` nepoužívej: smazal by i obrazy jiných projektů.
+Staré obrazy tohoto projektu smaž po ověření ručně, např. `docker image rm ghcr.io/open-webui/open-terminal:0.18.6`.
 
 ## Nároky na server
 
