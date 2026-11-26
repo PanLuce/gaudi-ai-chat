@@ -9,7 +9,7 @@ x-logging: &default-logging
 services:
   # The only service people reach. Locally bound to 127.0.0.1; on the server PUBLIC_BIND_ADDRESS=0.0.0.0.
   caddy:
-    image: caddy:2.11.6-alpine
+    image: caddy:2.11.9-alpine
     ports:
       - "${PUBLIC_BIND_ADDRESS:-127.0.0.1}:80:80"
       - "${PUBLIC_BIND_ADDRESS:-127.0.0.1}:443:443"
@@ -34,7 +34,7 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: postgres:18.1-alpine
+    image: postgres:18.7-alpine
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run scripts/bootstrap.sh}
     volumes:
@@ -50,7 +50,7 @@ services:
 
   # One-shot: creates the per-application databases, idempotent on every `up`.
   db-init:
-    image: postgres:18.1-alpine
+    image: postgres:18.7-alpine
     command: ["sh", "/ensure-databases.sh"]
     environment:
       PGHOST: postgres
@@ -66,7 +66,7 @@ services:
     logging: *default-logging
 
   open-webui:
-    image: ghcr.io/open-webui/open-webui:0.13.3
+    image: ghcr.io/open-webui/open-webui:v0.13.5
     # No published port: people reach it only through caddy (http://open-webui:8080).
     environment:
       DATABASE_URL: postgresql://openwebui:${OPENWEBUI_DB_PASSWORD:?run scripts/bootstrap.sh}@postgres:5432/openwebui
@@ -119,7 +119,7 @@ services:
     restart: unless-stopped
 
   litellm:
-    image: ghcr.io/berriai/litellm:v1.108.4
+    image: ghcr.io/berriai/litellm:1.111.0
     command: ["--config", "/app/config.yaml"]
     ports:
       - "127.0.0.1:4000:4000"
@@ -147,7 +147,7 @@ services:
     restart: unless-stopped
 
   open-terminal:
-    image: ghcr.io/open-webui/open-terminal:0.17.6
+    image: ghcr.io/open-webui/open-terminal:0.18.6
     # No published port: reachable only from the compose network as http://open-terminal:8000
     environment:
       OPEN_TERMINAL_API_KEY: ${OPEN_TERMINAL_API_KEY:?set OPEN_TERMINAL_API_KEY in .env}
