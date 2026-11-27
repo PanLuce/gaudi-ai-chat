@@ -1,6 +1,10 @@
 # Shared helpers for the stack scripts. Source it, don't run it.
 # Scripts read .env, which the Claude Code sandbox may not read: run them outside the sandbox.
 
+# Sourced once even when a script sources both bootstrap.sh and test-lib.sh (readonly values, cleanups).
+[ -z "${GAUDI_LIB_SOURCED:-}" ] || return 0
+GAUDI_LIB_SOURCED=1
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$REPO_ROOT/.env"
 LITELLM_URL="http://127.0.0.1:4000"
