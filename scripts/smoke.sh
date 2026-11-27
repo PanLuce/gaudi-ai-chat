@@ -5,11 +5,8 @@
 set -euo pipefail
 . "$(dirname "$0")/test-lib.sh"
 
-readonly IMAGE_MODEL="gemini-image"
-readonly SMALL_CHAT='{"model":"claude-haiku","stream":false,"max_tokens":5,"messages":[{"role":"user","content":"ahoj"}]}'
 readonly TERMINAL_ID="open-terminal"
 readonly TERMINAL_COMMAND='{"command":"echo smoke-terminal-ok"}'
-readonly SMALL_IMAGE='{"prompt":"a small red apple on a white table"}'
 
 readonly ONE_SHOT_SERVICES="db-init"
 
@@ -120,24 +117,10 @@ image_refused_for_budget() {
         and ((.metadata.error_information.error_message // "") | contains("ExceededBudget")))' >/dev/null
 }
 
-# "2026-12-01T00:00:00Z" -> "1. 12. 2026". Resets happen at midnight UTC, so the UTC day is the Prague day.
-staff_budget_reset_day() {
-  litellm_admin POST /budget/info "{\"budgets\":[\"$STAFF_BUDGET_ID\"]}" \
-    | jq -r '.[0].budget_reset_at[0:10] | split("-") | map(tonumber) | "\(.[2]). \(.[1]). \(.[0])"'
-}
-
-# The person sees a Czech message with a code for the admin, never their e-mail or LiteLLM internals.
 assert_blocked_by_budget() {
   local path=$1 request=$2 email=$3 response
   response=$(api_request "$TEMP_USER_TOKEN" POST "$OPENWEBUI_URL$path" "$request" 2>/dev/null || true)
-  grep -q "Tvůj rozpočet na AI chat je vyčerpaný" <<<"$response" && grep -q "(kód: rozpocet)" <<<"$response" \
-    || fail "overspent user did not get the Czech budget message: $(head -c 300 <<<"$response")"
-  grep -qF "využitý celých $STAFF_BUDGET_USD \$" <<<"$response" \
-    || fail "the budget message does not name the \$$STAFF_BUDGET_USD budget: $(head -c 300 <<<"$response")"
-  grep -qF "Rozpočet se obnoví $(staff_budget_reset_day)." <<<"$response" \
-    || fail "the budget message does not say when the budget resets ($(staff_budget_reset_day)): $(head -c 300 <<<"$response")"
-  ! grep -qE "$email|ExceededBudget" <<<"$response" \
-    || fail "the budget message shows the e-mail or LiteLLM internals: $(head -c 300 <<<"$response")"
+  assert_personal_budget_message "$response" "$email"
 }
 
 # The school's budget lives on the key Open WebUI uses. A temporary key with spend over its budget

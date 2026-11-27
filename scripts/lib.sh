@@ -7,6 +7,8 @@ LITELLM_URL="http://127.0.0.1:4000"
 
 # Default monthly budget of every staff member; litellm/config.yaml refers to it by id.
 readonly STAFF_BUDGET_ID="staff-monthly"
+# The model behind Chat's image button (litellm/config.yaml).
+readonly IMAGE_MODEL="gemini-image"
 # The text models litellm/config.yaml offers and Chat shows (sorted).
 readonly EXPECTED_TEXT_MODELS="claude-haiku claude-opus claude-sonnet"
 readonly STAFF_BUDGET_USD=5

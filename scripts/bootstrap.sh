@@ -10,7 +10,6 @@ readonly OPENWEBUI_KEY_MONTHLY_BUDGET_USD=100
 readonly OPENWEBUI_KEY_ALIAS="open-webui"
 
 readonly LITELLM_FOR_OPENWEBUI="http://litellm:4000/v1" # LiteLLM's address inside the compose network
-readonly IMAGE_MODEL="gemini-image"
 readonly TERMINAL_ID="open-terminal"
 
 # Initial model setup in Open WebUI: "<LiteLLM model name>|<name shown>|<who sees it: all or admin>".
