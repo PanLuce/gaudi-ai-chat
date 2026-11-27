@@ -170,40 +170,6 @@ check_config_error_message_is_czech() {
   pass "a broken model setting shows a Czech message"
 }
 
-# Provider errors cannot be caused for free, so the mapping runs against LiteLLM's own exception
-# classes inside the running LiteLLM container, without network.
-check_provider_errors_are_czech() {
-  compose exec -T litellm python - <<'PY_CHECK' || fail "a provider error has no Czech message"
-import sys, httpx, litellm
-sys.path.insert(0, "/app")
-from czech_errors import czech_message
-
-forbidden = httpx.Response(403, request=httpx.Request("POST", "https://provider"))
-cases = [
-    ("pretizeno", litellm.RateLimitError("rate limited", "anthropic", "claude")),
-    ("pretizeno", litellm.ServiceUnavailableError("unavailable", "anthropic", "claude")),
-    ("pretizeno", litellm.InternalServerError("AnthropicException - Overloaded", "anthropic", "claude")),
-    ("cas", litellm.Timeout("timed out", "claude", "anthropic")),
-    ("dlouha-konverzace", litellm.ContextWindowExceededError("prompt is too long", "claude", "anthropic")),
-    ("odmitnuto", litellm.ContentPolicyViolationError("blocked", "claude", "anthropic")),
-    ("nastaveni", litellm.AuthenticationError("invalid x-api-key", "anthropic", "claude")),
-    ("nastaveni", litellm.PermissionDeniedError("no access", "anthropic", "claude", forbidden)),
-    ("nastaveni", litellm.NotFoundError("model not found", "claude", "anthropic")),
-    ("jina", litellm.BadRequestError("max_tokens is too large", "claude", "anthropic")),
-    ("jina", litellm.APIConnectionError("connection reset", "anthropic", "claude")),
-    ("jina", ValueError("anything else")),
-]
-failed = False
-for wanted, exc in cases:
-    got = czech_message(exc)
-    if not got or got[0] != wanted or not got[1]:
-        failed = True
-        print(f"✗ {type(exc).__name__}: got {got}, wanted code {wanted}", file=sys.stderr)
-sys.exit(1 if failed else 0)
-PY_CHECK
-  pass "every kind of provider error has a Czech message"
-}
-
 
 run_free_checks() {
   check_all_services_healthy
@@ -215,7 +181,6 @@ run_free_checks() {
   check_staff_member
   check_school_budget_message_is_czech
   check_config_error_message_is_czech
-  check_provider_errors_are_czech
 }
 
 main() {

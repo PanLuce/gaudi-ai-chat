@@ -27,6 +27,7 @@ Podrobnosti jsou v hlavičce každého skriptu. Všechny kontroly jsou zdarma: �
 | `scripts/smoke.sh` | Ověří běžící stack přes porty, které používají lidé. Skutečnou odpověď a obrázek zkoušíš ručně (průvodce, krok Ověř, že vše funguje). |
 | `scripts/check-docs.sh` | Ověří `docs/` a README: odkazy, slovník názvů, žádná tajemství, úplné kroky průvodce. Potřebuje `node` a běžící stack; `--offline` vynechá odkazy (CI). |
 | `scripts/check-config.sh` | Bez spuštění stacku: ven je publikovaný jen Vchod, Brána jen na `127.0.0.1`, Brána nabízí modely Claude. Běží v CI. |
+| `scripts/check-czech-errors.sh` | Testy českých hlášek Brány (`litellm/test_czech_errors.py`) uvnitř obrazu LiteLLM z `docker-compose.yml`, bez sítě. Běží v CI. |
 | `scripts/ci-env.sh` | Vyrobí `.env` pro CI: vygenerovaná hesla, vymyšlené klíče poskytovatelů. Existující `.env` nepřepíše. |
 | `scripts/check-bootstrap-secrets.sh` | Bootstrap na čerstvém `.env` vygeneruje všechna hesla a bez `WEBUI_ADMIN_EMAIL` se zastaví. |
 | `scripts/check-first-admin.sh` | Dočasný Chat s prázdnou databází: správce z `.env` se přihlásí, registrace je zavřená. |

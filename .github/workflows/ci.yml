@@ -22,3 +22,12 @@ jobs:
       - run: scripts/check-config.sh
       - run: scripts/check-bootstrap-secrets.sh
       - run: scripts/check-docs.sh --offline
+
+  czech-errors:
+    name: czech-errors
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/ci-env.sh
+      - run: scripts/check-czech-errors.sh
