@@ -63,7 +63,7 @@ jobs:
         run: |
           if [ "$EVENT" = workflow_dispatch ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
             echo "run=true" >> "$GITHUB_OUTPUT"
-          elif git diff --name-only "$BASE"...HEAD | grep -qE '^(docker-compose\.yml|caddy/|litellm/|scripts/(bootstrap|lib|test-lib|ci-env|check-chat-contract)\.sh|\.github/workflows/)'; then
+          elif changed=$(git diff --name-only "$BASE"...HEAD) && grep -qE '^(docker-compose\.yml|caddy/|litellm/|scripts/(bootstrap|lib|test-lib|ci-env|check-chat-contract)\.sh|\.github/workflows/)' <<<"$changed"; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
