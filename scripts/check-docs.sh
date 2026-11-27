@@ -255,9 +255,10 @@ check_dependabot_watches_images() {
   grep -q 'directory: "/"' "$config" || fail "dependabot.yml does not look at the repo root, where docker-compose.yml is"
   grep -q 'interval: "weekly"' "$config" || fail "dependabot.yml does not run weekly"
   grep -q 'patterns: \["\*"\]' "$config" || fail "dependabot.yml does not group all images into one PR"
+  grep -q 'package-ecosystem: "github-actions"' "$config" || fail "dependabot.yml does not watch the actions CI uses"
   grep -A1 'dependency-name: "postgres"' "$config" | grep -q 'version-update:semver-major' \
     || fail "dependabot.yml would offer a new Postgres major version"
-  pass ".github/dependabot.yml: one weekly PR for the images, no new Postgres major version"
+  pass ".github/dependabot.yml: one weekly PR for the images (no new Postgres major version), one for the CI actions"
 }
 
 check_license() {

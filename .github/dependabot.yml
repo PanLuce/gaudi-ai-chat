@@ -1,4 +1,5 @@
-# One PR a week with new versions of the images in docker-compose.yml (README, Nové verze obrazů).
+# One PR a week with new versions of the images in docker-compose.yml (README, Nové verze obrazů),
+# and one with new versions of the actions CI uses (.github/workflows/).
 version: 2
 updates:
   - package-ecosystem: "docker-compose"
@@ -12,3 +13,10 @@ updates:
       # A new Postgres major version needs a dump and restore of the data, not a version bump.
       - dependency-name: "postgres"
         update-types: ["version-update:semver-major"]
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]

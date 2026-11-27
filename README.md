@@ -118,20 +118,35 @@ správce v Chatu a bootstrap ji nepřepisuje. Co vidí běžný uživatel: `scri
 ## Nové verze obrazů
 
 Verze obrazů v `docker-compose.yml` jsou pevné. Jednou týdně pošle Dependabot (`.github/dependabot.yml`) jeden PR
-se všemi novými verzemi; novou hlavní verzi Postgresu nenabízí, protože ta potřebuje převod dat. CI zatím
-není (#30), PR se ověří ručně:
-
-```sh
-gh pr checkout <číslo PR>
-scripts/bootstrap.sh
-scripts/smoke.sh        # samé ✓, pak merge
-git switch main
-```
+se všemi novými verzemi; novou hlavní verzi Postgresu nenabízí, protože ta potřebuje převod dat. Druhý PR
+týdně zvedá verze akcí v CI. Oba PR ověří CI (níže).
 
 Merge nic nenasadí. Na server se nová verze dostane krokem Aktualizace v průvodci (záloha → `git pull` →
 bootstrap → smoke → úklid starých obrazů). Úklid (`docker image prune -a -f`) běží jen po samých ✓, takže po
 nepovedené aktualizaci staré obrazy zůstanou. Lokálně `prune -a` nepoužívej: smazal by i obrazy jiných projektů.
 Staré obrazy tohoto projektu smaž po ověření ručně, např. `docker image rm ghcr.io/open-webui/open-terminal:0.18.6`.
+
+## CI
+
+Každý PR do `main` ověří GitHub Actions (`.github/workflows/ci.yml`) čtyřmi povinnými checky. Bez zelených
+checků merge nejde. Celý stack (`scripts/smoke.sh`) v CI neběží, jen lokálně a na serveru.
+
+| Check | Co ověří | Jak dlouho |
+|---|---|---|
+| `unit` | konfigurace bez spuštění (`check-config.sh`), hesla z bootstrapu, offline `check-docs.sh` | sekundy |
+| `czech-errors` | české hlášky Brány v obrazu LiteLLM (`check-czech-errors.sh`) | ~1 min |
+| `gateway` | Brána a Databáze: rozpočty a hlášky tak, jak je vidí Chat (`check-gateway.sh`) | ~1,5 min |
+| `chat-contract` | Chat bez Terminálu na prázdné databázi: bootstrap najde všechna admin API (`check-chat-contract.sh`). Jen když se změnilo něco, na čem stojí; jinak projde hned. | ~4 min |
+
+CI nepotřebuje žádné secrets: `scripts/ci-env.sh` vyrobí `.env` s vymyšlenými klíči poskytovatelů a nic se
+poskytovatele neptá. Ručně (ladění na Macu) totéž:
+
+```sh
+gh pr checkout <číslo PR>
+scripts/bootstrap.sh
+scripts/smoke.sh        # samé ✓
+git switch main
+```
 
 ## Nároky na server
 
