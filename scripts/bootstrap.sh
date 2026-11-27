@@ -211,13 +211,8 @@ sync_openwebui_connection() {
   info "Open WebUI connection points at LiteLLM with its own key"
 }
 
-main() {
-  require_tools docker curl jq openssl
-  load_env
-  ensure_secrets
-  require_admin_email
-  load_env
-  compose up -d --wait
+# Everything bootstrap sets up once the services run; check-chat-contract.sh runs it on its own.
+configure_stack() {
   ensure_openwebui_litellm_key
   ensure_staff_budget
   ensure_openwebui_admin_key
@@ -226,6 +221,16 @@ main() {
   sync_openwebui_image_generation
   sync_openwebui_public_address
   sync_openwebui_terminal
+}
+
+main() {
+  require_tools docker curl jq openssl
+  load_env
+  ensure_secrets
+  require_admin_email
+  load_env
+  compose up -d --wait
+  configure_stack
   pass "bootstrap done"
 }
 
