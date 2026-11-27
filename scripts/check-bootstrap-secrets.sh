@@ -25,7 +25,7 @@ main_check() {
   pass "a fresh .env from .env.example gets every generated secret"
   # Before the first admin exists there can be no admin key; a placeholder would make bootstrap use it.
   grep -q '^OPENWEBUI_ADMIN_API_KEY=$' "$ENV_FILE" || fail ".env.example must leave OPENWEBUI_ADMIN_API_KEY empty"
-  pass "a fresh .env has no admin key yet, so bootstrap skips the admin steps"
+  pass "a fresh .env has no admin key yet, so bootstrap makes one from the admin's sign-in"
   # The Chat admin is created from .env on the first start, so bootstrap must stop until the e-mail is there.
   local message
   message=$( (require_admin_email) 2>&1 ) && fail "bootstrap goes on without WEBUI_ADMIN_EMAIL in .env"

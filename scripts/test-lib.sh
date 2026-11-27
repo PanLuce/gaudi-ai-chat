@@ -10,17 +10,6 @@ smoke_tag() { echo "smoke-$1-$(date +%s)-$RANDOM"; }
 
 unique_smoke_email() { echo "$(smoke_tag user)@skolagaudi.cz"; }
 
-# Runs the command until it succeeds: retry_until <tries> <seconds between> <command…>. Non-zero when it never does.
-retry_until() {
-  local tries=$1 delay=$2 attempt
-  shift 2
-  for attempt in $(seq 1 "$tries"); do
-    "$@" && return 0
-    [ "$attempt" = "$tries" ] || sleep "$delay"
-  done
-  return 1
-}
-
 # What LiteLLM has charged to a person's e-mail, empty when it knows no such person.
 customer_spend() {
   litellm_admin GET "/customer/info?end_user_id=$1" 2>/dev/null | jq -r '.spend // empty' || true

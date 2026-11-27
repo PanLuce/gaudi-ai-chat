@@ -40,6 +40,17 @@ load_env() {
 
 compose() { docker compose --project-directory "$REPO_ROOT" "$@"; }
 
+# Runs the command until it succeeds: retry_until <tries> <seconds between> <command…>. Non-zero when it never does.
+retry_until() {
+  local tries=$1 delay=$2 attempt
+  shift 2
+  for attempt in $(seq 1 "$tries"); do
+    "$@" && return 0
+    [ "$attempt" = "$tries" ] || sleep "$delay"
+  done
+  return 1
+}
+
 # Secrets travel through a curl config on a file descriptor, never through argv or the URL,
 # so other processes on the host cannot read them with `ps`.
 api_request() {
@@ -60,7 +71,7 @@ litellm_as() {
 }
 
 openwebui_admin() {
-  [ -n "${OPENWEBUI_ADMIN_API_KEY:-}" ] || fail "OPENWEBUI_ADMIN_API_KEY is not set in .env (see README: Admin API key)"
+  [ -n "${OPENWEBUI_ADMIN_API_KEY:-}" ] || fail "OPENWEBUI_ADMIN_API_KEY is not set in .env (scripts/bootstrap.sh makes it)"
   api_request "$OPENWEBUI_ADMIN_API_KEY" "$1" "$OPENWEBUI_URL$2" "${3:-}"
 }
 

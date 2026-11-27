@@ -10,12 +10,12 @@ v produkci; liší se jen hodnoty v `.env`. Nasazení na server: [docs/nasazeni.
    účet správce Chatu), `LITELLM_MASTER_KEY` (`sk-` + náhodný text, např. `sk-$(openssl rand -hex 24)`)
    a `OPEN_TERMINAL_API_KEY` (`openssl rand -hex 24`).
 2. `scripts/bootstrap.sh` — vygeneruje ostatní hesla (i `WEBUI_ADMIN_PASSWORD`), spustí stack a založí klíč
-   Chatu v Bráně. Chat při prvním startu s prázdnou databází založí správce z `.env` a zavře registraci.
-3. Otevři `http://localhost` a přihlas se jako správce (heslo `WEBUI_ADMIN_PASSWORD` v `.env`). Rozhraní je
-   česky; když prohlížeč pamatuje jiný jazyk, přepni ho v Nastavení → Obecné → Jazyk.
-4. **Admin API key:** Nastavení → Účet → API klíče → vytvořit, uložit do `.env` jako
-   `OPENWEBUI_ADMIN_API_KEY`. Nová databáze = nový klíč.
-5. Znovu `scripts/bootstrap.sh` (připojí Chat k Bráně) a `scripts/smoke.sh`.
+   Chatu v Bráně. Chat při prvním startu s prázdnou databází založí správce z `.env` a zavře registraci;
+   bootstrap se jím přihlásí, vyrobí si admin API klíč (`OPENWEBUI_ADMIN_API_KEY` v `.env`, nová databáze =
+   nový klíč sám) a připojí Chat k Bráně.
+3. `scripts/smoke.sh`, pak otevři `http://localhost` a přihlas se jako správce (heslo `WEBUI_ADMIN_PASSWORD`
+   v `.env`; když ho v Chatu změníš, zapiš ho i do `.env`). Rozhraní je česky; když prohlížeč pamatuje jiný
+   jazyk, přepni ho v Nastavení → Obecné → Jazyk.
 
 ## Skripty
 

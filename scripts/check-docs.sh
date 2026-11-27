@@ -235,6 +235,16 @@ JS
   pass "docs/nasazeni.html: the update removes old images only after a passing smoke, then shows free space"
 }
 
+check_guide_makes_no_admin_key_by_hand() {
+  run_guide_check "docs/nasazeni.html: the guide still has the admin copy Chat's API key by hand" <<'JS'
+// bootstrap.sh makes the key itself (#30), so no step may send the admin to create or paste it.
+const manual = guide.STEPS.filter((step) => /API klíče|OPENWEBUI_ADMIN_API_KEY=/.test(`${step.where} ${step.command || ""} ${step.see}`));
+if (manual.length) { console.error(`✗ steps that still handle the admin API key by hand: ${manual.map((s) => s.title).join(", ")}`); process.exit(1); }
+JS
+  grep -q 'API klíče' "$REPO_ROOT/README.md" && fail "README.md still has the admin create Chat's API key by hand"
+  pass "docs/nasazeni.html and README.md: bootstrap makes Chat's admin API key, nobody copies it"
+}
+
 # Not a page, but the README's update section rests on it: Dependabot watches the images in
 # docker-compose.yml once a week, in one PR, and never offers a new Postgres major version (that needs a
 # dump and restore). Kept here until there is a second config check worth a script of its own.
@@ -417,6 +427,7 @@ main() {
   check_license
   check_guide_security_updates
   check_guide_prunes_images_after_smoke
+  check_guide_makes_no_admin_key_by_hand
   check_dependabot_watches_images
   check_guide_backup_stays_on_server
   check_guide_matches_the_stack
