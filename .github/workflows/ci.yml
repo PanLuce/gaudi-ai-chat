@@ -1,0 +1,24 @@
+# Fast checks on every pull request and on main; the whole stack (scripts/smoke.sh) runs by hand
+# locally and on the server. No secrets: scripts/ci-env.sh makes a .env with made-up provider keys.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/ci-env.sh
+      - run: scripts/check-config.sh
+      - run: scripts/check-bootstrap-secrets.sh
+      - run: scripts/check-docs.sh --offline

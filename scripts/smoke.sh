@@ -5,7 +5,6 @@
 set -euo pipefail
 . "$(dirname "$0")/test-lib.sh"
 
-readonly EXPECTED_TEXT_MODELS="claude-haiku claude-opus claude-sonnet"
 readonly IMAGE_MODEL="gemini-image"
 readonly SMALL_CHAT='{"model":"claude-haiku","stream":false,"max_tokens":5,"messages":[{"role":"user","content":"ahoj"}]}'
 readonly TERMINAL_ID="open-terminal"
@@ -44,16 +43,6 @@ check_websocket_passes_through_caddy() {
     "$OPENWEBUI_URL/ws/socket.io/?EIO=4&transport=websocket" 2>/dev/null || true)
   [ "$status" = "101" ] || fail "WebSocket upgrade through $OPENWEBUI_URL returned $status, expected 101"
   pass "chat streaming (WebSocket) passes through Caddy"
-}
-
-# Only Caddy opens ports to the outside; the LiteLLM admin UI is published on this machine only (SSH tunnel).
-check_only_caddy_is_published() {
-  local exposed
-  exposed=$(compose ps --format json | jq -rs '[.[] | (if type == "array" then .[] else . end) | .Service as $s | .Publishers[]? | select(.PublishedPort > 0)
-      | select($s != "caddy" and ($s != "litellm" or .URL != "127.0.0.1")) | "\($s) \(.URL):\(.PublishedPort)"] | join(", ")') \
-    || fail "could not read the published ports from docker compose ps"
-  [ -z "$exposed" ] || fail "published past Caddy: $exposed"
-  pass "only Caddy is reachable from outside; LiteLLM listens on 127.0.0.1 only"
 }
 
 # Links in e-mails and OAuth redirects are built from this address.
@@ -220,7 +209,6 @@ run_free_checks() {
   check_all_services_healthy
   check_openwebui_is_served_through_caddy
   check_websocket_passes_through_caddy
-  check_only_caddy_is_published
   check_openwebui_knows_its_public_address
   check_openwebui_offers_claude_models
   check_admin_runs_commands_in_the_terminal

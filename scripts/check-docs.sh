@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks the explanatory pages in docs/: every link answers, they use one vocabulary,
 # every script they mention exists, and nothing in them looks like a secret.
-# Local links (localhost) need the running stack. Free.
+# Local links (localhost) need the running stack; --offline skips every link (CI, no stack). Free.
 set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
@@ -392,16 +392,21 @@ check_no_paid_checks() {
 }
 
 main() {
+  local page offline=false
+  case "${1:-}" in
+    --offline) offline=true ;;
+    "") ;;
+    *) fail "usage: scripts/check-docs.sh [--offline]" ;;
+  esac
   require_tools curl grep node
-  local page
   for page in $PAGES; do
     check_page_exists "$page"
     check_vocabulary "$page"
     check_mentioned_scripts_exist "$page"
     check_no_secrets "$page"
     check_repo_name "$page"
-    check_links "$page"
-    pass "docs/$page: links answer, one vocabulary, no secrets"
+    if $offline; then info "docs/$page: links not checked (--offline)"; else check_links "$page"; fi
+    pass "docs/$page: one vocabulary, no secrets$($offline || echo ", links answer")"
   done
   check_guide_prompts
   check_guide_phases
