@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Brings the stack to the state .env describes. Safe to run any number of times: generates missing
-# secrets, starts the stack, sets up LiteLLM (Open WebUI's key, the staff budget) and, once .env has
-# an Open WebUI admin key, Open WebUI (connection, first model setup, images, address, terminal). See main.
+# secrets, starts the stack, sets up LiteLLM (Open WebUI's key, the staff budget), makes Open WebUI's admin
+# API key and sets up Open WebUI (connection, first model setup, images, address, terminal). See main.
 set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
@@ -10,7 +10,6 @@ readonly OPENWEBUI_KEY_MONTHLY_BUDGET_USD=100
 readonly OPENWEBUI_KEY_ALIAS="open-webui"
 
 readonly LITELLM_FOR_OPENWEBUI="http://litellm:4000/v1" # LiteLLM's address inside the compose network
-readonly IMAGE_MODEL="gemini-image"
 readonly TERMINAL_ID="open-terminal"
 
 # Initial model setup in Open WebUI: "<LiteLLM model name>|<name shown>|<who sees it: all or admin>".
@@ -85,6 +84,34 @@ ensure_staff_budget() {
   fi
   litellm_admin POST "$path" "$budget" >/dev/null || fail "could not set staff budget '$STAFF_BUDGET_ID'"
   info "staff budget: \$$STAFF_BUDGET_USD per 30 days ($STAFF_BUDGET_ID)"
+}
+
+openwebui_admin_key_is_valid() {
+  [ -n "${OPENWEBUI_ADMIN_API_KEY:-}" ] && [ "$(openwebui_admin_status /api/v1/auths/admin/config)" = 200 ]
+}
+
+# Sets ADMIN_TOKEN. Right after the first start Caddy may still be getting its certificate, so retry.
+sign_in_as_admin() {
+  ADMIN_TOKEN=$(api_request "" POST "$OPENWEBUI_URL/api/v1/auths/signin" \
+    "$(jq -cn --arg e "$WEBUI_ADMIN_EMAIL" --arg p "$WEBUI_ADMIN_PASSWORD" '{email: $e, password: $p}')" 2>/dev/null | jq -er .token)
+}
+
+# Chat creates its admin from .env on the first start; bootstrap signs in as that admin and makes the
+# API key for its own admin steps, so nobody copies it from the UI. Kept in .env, never printed, and
+# replaced only when it no longer works (e.g. a fresh database).
+ensure_openwebui_admin_key() {
+  if openwebui_admin_key_is_valid; then
+    info "Open WebUI admin key is valid"
+    return
+  fi
+  local key
+  retry_until 30 2 sign_in_as_admin \
+    || fail "could not sign in to Chat as WEBUI_ADMIN_EMAIL with WEBUI_ADMIN_PASSWORD from .env (password changed in Chat? put the new one in .env)"
+  key=$(api_request "$ADMIN_TOKEN" POST "$OPENWEBUI_URL/api/v1/auths/api_key" | jq -er .api_key) \
+    || fail "could not create an admin API key in Chat (is ENABLE_API_KEYS on in docker-compose.yml?)"
+  set_env_value OPENWEBUI_ADMIN_API_KEY "$key"
+  OPENWEBUI_ADMIN_API_KEY=$key
+  info "created Open WebUI admin API key"
 }
 
 # The HTTP status of an admin GET to Open WebUI; 000 when it does not answer at all.
@@ -180,8 +207,20 @@ sync_openwebui_public_address() {
 sync_openwebui_connection() {
   openwebui_admin POST /openai/config/update "$(jq -n --arg url "$LITELLM_FOR_OPENWEBUI" --arg key "$OPENWEBUI_LITELLM_KEY" \
     '{ENABLE_OPENAI_API: true, OPENAI_API_BASE_URLS: [$url], OPENAI_API_KEYS: [$key], OPENAI_API_CONFIGS: {}}')" \
-    >/dev/null || fail "could not update Open WebUI's connection: is OPENWEBUI_ADMIN_API_KEY valid? A fresh database needs a new one (README: Admin API key)"
+    >/dev/null || fail "could not update Open WebUI's connection: the admin API key bootstrap just checked stopped working"
   info "Open WebUI connection points at LiteLLM with its own key"
+}
+
+# Everything bootstrap sets up once the services run; check-chat-contract.sh runs it on its own.
+configure_stack() {
+  ensure_openwebui_litellm_key
+  ensure_staff_budget
+  ensure_openwebui_admin_key
+  sync_openwebui_connection
+  seed_models
+  sync_openwebui_image_generation
+  sync_openwebui_public_address
+  sync_openwebui_terminal
 }
 
 main() {
@@ -191,17 +230,7 @@ main() {
   require_admin_email
   load_env
   compose up -d --wait
-  ensure_openwebui_litellm_key
-  ensure_staff_budget
-  if [ -z "${OPENWEBUI_ADMIN_API_KEY:-}" ]; then
-    info "skipped the Open WebUI steps: OPENWEBUI_ADMIN_API_KEY not set yet (README: Admin API key)"
-  else
-    sync_openwebui_connection
-    seed_models
-    sync_openwebui_image_generation
-    sync_openwebui_public_address
-    sync_openwebui_terminal
-  fi
+  configure_stack
   pass "bootstrap done"
 }
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks the explanatory pages in docs/: every link answers, they use one vocabulary,
 # every script they mention exists, and nothing in them looks like a secret.
-# Local links (localhost) need the running stack. Free.
+# Local links (localhost) need the running stack; --offline skips every link (CI, no stack). Free.
 set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
@@ -235,6 +235,16 @@ JS
   pass "docs/nasazeni.html: the update removes old images only after a passing smoke, then shows free space"
 }
 
+check_guide_makes_no_admin_key_by_hand() {
+  run_guide_check "docs/nasazeni.html: the guide still has the admin copy Chat's API key by hand" <<'JS'
+// bootstrap.sh makes the key itself (#30), so no step may send the admin to create or paste it.
+const manual = guide.STEPS.filter((step) => /API klíče|OPENWEBUI_ADMIN_API_KEY=/.test(`${step.where} ${step.command || ""} ${step.see}`));
+if (manual.length) { console.error(`✗ steps that still handle the admin API key by hand: ${manual.map((s) => s.title).join(", ")}`); process.exit(1); }
+JS
+  grep -q 'API klíče' "$REPO_ROOT/README.md" && fail "README.md still has the admin create Chat's API key by hand"
+  pass "docs/nasazeni.html and README.md: bootstrap makes Chat's admin API key, nobody copies it"
+}
+
 # Not a page, but the README's update section rests on it: Dependabot watches the images in
 # docker-compose.yml once a week, in one PR, and never offers a new Postgres major version (that needs a
 # dump and restore). Kept here until there is a second config check worth a script of its own.
@@ -245,9 +255,10 @@ check_dependabot_watches_images() {
   grep -q 'directory: "/"' "$config" || fail "dependabot.yml does not look at the repo root, where docker-compose.yml is"
   grep -q 'interval: "weekly"' "$config" || fail "dependabot.yml does not run weekly"
   grep -q 'patterns: \["\*"\]' "$config" || fail "dependabot.yml does not group all images into one PR"
+  grep -q 'package-ecosystem: "github-actions"' "$config" || fail "dependabot.yml does not watch the actions CI uses"
   grep -A1 'dependency-name: "postgres"' "$config" | grep -q 'version-update:semver-major' \
     || fail "dependabot.yml would offer a new Postgres major version"
-  pass ".github/dependabot.yml: one weekly PR for the images, no new Postgres major version"
+  pass ".github/dependabot.yml: one weekly PR for the images (no new Postgres major version), one for the CI actions"
 }
 
 check_license() {
@@ -392,16 +403,21 @@ check_no_paid_checks() {
 }
 
 main() {
+  local page offline=false
+  case "${1:-}" in
+    --offline) offline=true ;;
+    "") ;;
+    *) fail "usage: scripts/check-docs.sh [--offline]" ;;
+  esac
   require_tools curl grep node
-  local page
   for page in $PAGES; do
     check_page_exists "$page"
     check_vocabulary "$page"
     check_mentioned_scripts_exist "$page"
     check_no_secrets "$page"
     check_repo_name "$page"
-    check_links "$page"
-    pass "docs/$page: links answer, one vocabulary, no secrets"
+    if $offline; then info "docs/$page: links not checked (--offline)"; else check_links "$page"; fi
+    pass "docs/$page: one vocabulary, no secrets$($offline || echo ", links answer")"
   done
   check_guide_prompts
   check_guide_phases
@@ -412,6 +428,7 @@ main() {
   check_license
   check_guide_security_updates
   check_guide_prunes_images_after_smoke
+  check_guide_makes_no_admin_key_by_hand
   check_dependabot_watches_images
   check_guide_backup_stays_on_server
   check_guide_matches_the_stack

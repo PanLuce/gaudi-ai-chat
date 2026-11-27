@@ -1,12 +1,20 @@
 # Shared helpers for the stack scripts. Source it, don't run it.
 # Scripts read .env, which the Claude Code sandbox may not read: run them outside the sandbox.
 
+# Sourced once even when a script sources both bootstrap.sh and test-lib.sh (readonly values, cleanups).
+[ -z "${GAUDI_LIB_SOURCED:-}" ] || return 0
+GAUDI_LIB_SOURCED=1
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$REPO_ROOT/.env"
 LITELLM_URL="http://127.0.0.1:4000"
 
 # Default monthly budget of every staff member; litellm/config.yaml refers to it by id.
 readonly STAFF_BUDGET_ID="staff-monthly"
+# The model behind Chat's image button (litellm/config.yaml).
+readonly IMAGE_MODEL="gemini-image"
+# The text models litellm/config.yaml offers and Chat shows (sorted).
+readonly EXPECTED_TEXT_MODELS="claude-haiku claude-opus claude-sonnet"
 readonly STAFF_BUDGET_USD=5
 
 fail() { echo "✗ $*" >&2; exit 1; }
@@ -32,6 +40,17 @@ load_env() {
 
 compose() { docker compose --project-directory "$REPO_ROOT" "$@"; }
 
+# Runs the command until it succeeds: retry_until <tries> <seconds between> <command…>. Non-zero when it never does.
+retry_until() {
+  local tries=$1 delay=$2 attempt
+  shift 2
+  for attempt in $(seq 1 "$tries"); do
+    "$@" && return 0
+    [ "$attempt" = "$tries" ] || sleep "$delay"
+  done
+  return 1
+}
+
 # Secrets travel through a curl config on a file descriptor, never through argv or the URL,
 # so other processes on the host cannot read them with `ps`.
 api_request() {
@@ -52,7 +71,7 @@ litellm_as() {
 }
 
 openwebui_admin() {
-  [ -n "${OPENWEBUI_ADMIN_API_KEY:-}" ] || fail "OPENWEBUI_ADMIN_API_KEY is not set in .env (see README: Admin API key)"
+  [ -n "${OPENWEBUI_ADMIN_API_KEY:-}" ] || fail "OPENWEBUI_ADMIN_API_KEY is not set in .env (scripts/bootstrap.sh makes it)"
   api_request "$OPENWEBUI_ADMIN_API_KEY" "$1" "$OPENWEBUI_URL$2" "${3:-}"
 }
 

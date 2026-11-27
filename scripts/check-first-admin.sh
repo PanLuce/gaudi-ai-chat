@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Checks that a fresh Chat (Open WebUI) creates its admin from .env and closes sign-up, so nobody else
-# can take the admin account in the minutes after the first start. Runs a throwaway Chat container
+# can take the admin account in the minutes after the first start, and that bootstrap.sh then makes
+# the admin API key for its own steps without anyone copying it from the UI. Runs a throwaway Chat container
 # with an empty database of its own; the running stack and its data are not touched. Free.
 set -euo pipefail
 . "$(dirname "$0")/test-lib.sh"
+. "$(dirname "$0")/bootstrap.sh"
 
 readonly CHAT_SERVICE="open-webui"
 readonly TAG=$(smoke_tag admin)
@@ -11,11 +13,12 @@ readonly ADMIN_EMAIL="$TAG@skolagaudi.cz"
 ADMIN_PASSWORD=""
 CHAT_URL=""
 
-# The admin settings exactly as docker-compose.yml hands them to Chat, filled with test values.
+# The admin settings exactly as docker-compose.yml hands them to Chat, filled with test values, and
+# whether Chat allows API keys at all (bootstrap needs one).
 chat_admin_env() {
   WEBUI_ADMIN_EMAIL="$ADMIN_EMAIL" WEBUI_ADMIN_PASSWORD="$ADMIN_PASSWORD" compose config --format json \
     | jq -er --arg s "$CHAT_SERVICE" '.services[$s].environment
-        | {WEBUI_ADMIN_EMAIL, WEBUI_ADMIN_PASSWORD}
+        | {WEBUI_ADMIN_EMAIL, WEBUI_ADMIN_PASSWORD, ENABLE_API_KEYS}
         | if (.WEBUI_ADMIN_EMAIL // "") == "" or (.WEBUI_ADMIN_PASSWORD // "") == ""
           then error("docker-compose.yml does not pass WEBUI_ADMIN_EMAIL and WEBUI_ADMIN_PASSWORD to Chat") else . end
         | to_entries[] | "\(.key)=\(.value)"'
@@ -61,6 +64,24 @@ assert_sign_up_is_closed() {
   pass "nobody else can sign up to take the admin account"
 }
 
+admin_key_in_env_file() { grep '^OPENWEBUI_ADMIN_API_KEY=' "$ENV_FILE" | cut -d= -f2-; }
+
+# bootstrap.sh signs in as the admin from .env and keeps the key it makes in .env; a second run reuses it.
+assert_bootstrap_makes_the_admin_key() {
+  local first
+  ENV_FILE=$(mktemp)
+  on_exit_cleanup rm -f "$ENV_FILE"
+  printf 'OPENWEBUI_ADMIN_API_KEY=\n' > "$ENV_FILE"
+  OPENWEBUI_URL=$CHAT_URL WEBUI_ADMIN_EMAIL=$ADMIN_EMAIL WEBUI_ADMIN_PASSWORD=$ADMIN_PASSWORD OPENWEBUI_ADMIN_API_KEY=""
+  ensure_openwebui_admin_key >/dev/null
+  first=$(admin_key_in_env_file)
+  [ -n "$first" ] || fail "bootstrap did not keep an admin API key in .env"
+  [ "$(openwebui_admin_status /api/v1/auths/admin/config)" = 200 ] || fail "the admin API key bootstrap made does not work in Chat"
+  ensure_openwebui_admin_key >/dev/null
+  [ "$(admin_key_in_env_file)" = "$first" ] || fail "a second bootstrap replaced a working admin API key"
+  pass "bootstrap makes Chat's admin API key itself and keeps it on the next run"
+}
+
 main() {
   require_tools docker curl jq openssl
   load_env
@@ -68,6 +89,7 @@ main() {
   start_fresh_chat
   assert_admin_from_env_can_sign_in
   assert_sign_up_is_closed
+  assert_bootstrap_makes_the_admin_key
 }
 
 main "$@"

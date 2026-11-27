@@ -2,21 +2,13 @@
 # Source it instead of lib.sh, which it sources first. Every helper that creates data deletes it on exit.
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
+readonly SMALL_CHAT='{"model":"claude-haiku","stream":false,"max_tokens":5,"messages":[{"role":"user","content":"ahoj"}]}'
+readonly SMALL_IMAGE='{"prompt":"a small red apple on a white table"}'
+
 # A unique tag for data a check creates, so its cleanup (or a person) can always find it.
 smoke_tag() { echo "smoke-$1-$(date +%s)-$RANDOM"; }
 
 unique_smoke_email() { echo "$(smoke_tag user)@skolagaudi.cz"; }
-
-# Runs the command until it succeeds: retry_until <tries> <seconds between> <command…>. Non-zero when it never does.
-retry_until() {
-  local tries=$1 delay=$2 attempt
-  shift 2
-  for attempt in $(seq 1 "$tries"); do
-    "$@" && return 0
-    [ "$attempt" = "$tries" ] || sleep "$delay"
-  done
-  return 1
-}
 
 # What LiteLLM has charged to a person's e-mail, empty when it knows no such person.
 customer_spend() {
@@ -73,6 +65,25 @@ create_temporary_staff_user() {
   TEMP_USER_TOKEN=$(api_request "" POST "$OPENWEBUI_URL/api/v1/auths/signin" \
     "$(jq -n --arg e "$email" --arg p "$password" '{email: $e, password: $p}')" | jq -er .token) \
     || fail "could not sign in temporary user $email"
+}
+
+# "2026-12-01T00:00:00Z" -> "1. 12. 2026". Resets happen at midnight UTC, so the UTC day is the Prague day.
+staff_budget_reset_day() {
+  litellm_admin POST /budget/info "{\"budgets\":[\"$STAFF_BUDGET_ID\"]}" \
+    | jq -r '.[0].budget_reset_at[0:10] | split("-") | map(tonumber) | "\(.[2]). \(.[1]). \(.[0])"'
+}
+
+# The person sees a Czech message with a code for the admin, never their e-mail or LiteLLM internals.
+assert_personal_budget_message() {
+  local response=$1 email=$2
+  grep -q "Tvůj rozpočet na AI chat je vyčerpaný" <<<"$response" && grep -q "(kód: rozpocet)" <<<"$response" \
+    || fail "overspent user did not get the Czech budget message: $(head -c 300 <<<"$response")"
+  grep -qF "využitý celých $STAFF_BUDGET_USD \$" <<<"$response" \
+    || fail "the budget message does not name the \$$STAFF_BUDGET_USD budget: $(head -c 300 <<<"$response")"
+  grep -qF "Rozpočet se obnoví $(staff_budget_reset_day)." <<<"$response" \
+    || fail "the budget message does not say when the budget resets ($(staff_budget_reset_day)): $(head -c 300 <<<"$response")"
+  ! grep -qE "$email|ExceededBudget" <<<"$response" \
+    || fail "the budget message shows the e-mail or LiteLLM internals: $(head -c 300 <<<"$response")"
 }
 
 wait_until_demo_is_done() {

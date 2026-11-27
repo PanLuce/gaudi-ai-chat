@@ -255,19 +255,15 @@ grep -cE '^ANTHROPIC_API_KEY=sk-ant-api|^GEMINI_API_KEY=AIza|^WEBUI_ADMIN_EMAIL=
     command: `cd ~/gaudi-ai-chat
 scripts/bootstrap.sh
 curl --retry 10 --retry-delay 6 --retry-all-errors -sI https://ai.skolagaudi.cz/health | head -1`,
-    see: "„✓ bootstrap done“ a poslední řádek HTTP/2 200. Vchod si při prvním spuštění vyřizuje HTTPS certifikát několik desítek sekund; poslední příkaz to zkouší až minutu. Bootstrap napíše, že přeskočil kroky správce, protože ještě nemá API klíč správce.",
+    see: "„✓ bootstrap done“ a poslední řádek HTTP/2 200. Vchod si při prvním spuštění vyřizuje HTTPS certifikát několik desítek sekund; poslední příkaz to zkouší až minutu. Bootstrap se sám přihlásí jako správce Chatu, vyrobí si jeho API klíč („created Open WebUI admin API key“, do .env, nevypíše ho) a nastaví Chat: připojení k Bráně a modely.",
     guides: [
       { label: "Caddy: automatické HTTPS", url: "https://caddyserver.com/docs/automatic-https" } ] },
 
   { phase: "Spuštění", title: "Přihlas se jako správce", short: "Správce", manual: true,
     why: "Účet správce Chatu založil systém sám při prvním startu z tvého e-mailu a hesla v .env, takže ho nikdo jiný nepředběhne a registrace je zavřená. Pozor, hesla jsou tři různá: správce Chatu (tady), Brána (krok Podívej se do Brány) a root na serveru (jen SSH klíč).",
-    where: "V terminálu na svém počítači, sám (ne přes Claude): první příkaz ukáže heslo správce Chatu jen tobě. V prohlížeči na https://ai.skolagaudi.cz se přihlas svým e-mailem a tímto heslem. Pak Nastavení → Účet → API klíče → Vytvořit nový klíč. Na serveru ho vlož do .env za OPENWEBUI_ADMIN_API_KEY= a spusť bootstrap znovu.",
-    command: `ssh gaudi-ai "grep '^WEBUI_ADMIN_PASSWORD=' gaudi-ai-chat/.env | cut -d= -f2-"
-ssh gaudi-ai
-cd ~/gaudi-ai-chat
-nano .env
-scripts/bootstrap.sh`,
-    see: "Přihlášení projde a vpravo dole jsi správce. Bootstrap tentokrát hlásí „Open WebUI connection points at LiteLLM“ a založení modelů. V Chatu vidíš Claude Haiku jako výchozí model.",
+    where: "V terminálu na svém počítači, sám (ne přes Claude): první příkaz ukáže heslo správce Chatu jen tobě. V prohlížeči na https://ai.skolagaudi.cz se přihlas svým e-mailem a tímto heslem. Když heslo v Chatu změníš, zapiš nové i do .env za WEBUI_ADMIN_PASSWORD=, bootstrap se jím přihlašuje.",
+    command: `ssh gaudi-ai "grep '^WEBUI_ADMIN_PASSWORD=' gaudi-ai-chat/.env | cut -d= -f2-"`,
+    see: "Přihlášení projde a vpravo dole jsi správce. V Chatu vidíš Claude Haiku jako výchozí model.",
     guides: [
       { label: "Open WebUI: proměnné prostředí (WEBUI_ADMIN_EMAIL)", url: "https://docs.openwebui.com/reference/env-configuration/#webui_admin_email" } ] },
 

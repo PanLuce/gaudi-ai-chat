@@ -10,12 +10,12 @@ v produkci; liší se jen hodnoty v `.env`. Nasazení na server: [docs/nasazeni.
    účet správce Chatu), `LITELLM_MASTER_KEY` (`sk-` + náhodný text, např. `sk-$(openssl rand -hex 24)`)
    a `OPEN_TERMINAL_API_KEY` (`openssl rand -hex 24`).
 2. `scripts/bootstrap.sh` — vygeneruje ostatní hesla (i `WEBUI_ADMIN_PASSWORD`), spustí stack a založí klíč
-   Chatu v Bráně. Chat při prvním startu s prázdnou databází založí správce z `.env` a zavře registraci.
-3. Otevři `http://localhost` a přihlas se jako správce (heslo `WEBUI_ADMIN_PASSWORD` v `.env`). Rozhraní je
-   česky; když prohlížeč pamatuje jiný jazyk, přepni ho v Nastavení → Obecné → Jazyk.
-4. **Admin API key:** Nastavení → Účet → API klíče → vytvořit, uložit do `.env` jako
-   `OPENWEBUI_ADMIN_API_KEY`. Nová databáze = nový klíč.
-5. Znovu `scripts/bootstrap.sh` (připojí Chat k Bráně) a `scripts/smoke.sh`.
+   Chatu v Bráně. Chat při prvním startu s prázdnou databází založí správce z `.env` a zavře registraci;
+   bootstrap se jím přihlásí, vyrobí si admin API klíč (`OPENWEBUI_ADMIN_API_KEY` v `.env`, nová databáze =
+   nový klíč sám) a připojí Chat k Bráně.
+3. `scripts/smoke.sh`, pak otevři `http://localhost` a přihlas se jako správce (heslo `WEBUI_ADMIN_PASSWORD`
+   v `.env`; když ho v Chatu změníš, zapiš ho i do `.env`). Rozhraní je česky; když prohlížeč pamatuje jiný
+   jazyk, přepni ho v Nastavení → Obecné → Jazyk.
 
 ## Skripty
 
@@ -25,7 +25,12 @@ Podrobnosti jsou v hlavičce každého skriptu. Všechny kontroly jsou zdarma: �
 |---|---|
 | `scripts/bootstrap.sh` | Uvede stack do nakonfigurovaného stavu; lze spouštět opakovaně. |
 | `scripts/smoke.sh` | Ověří běžící stack přes porty, které používají lidé. Skutečnou odpověď a obrázek zkoušíš ručně (průvodce, krok Ověř, že vše funguje). |
-| `scripts/check-docs.sh` | Ověří `docs/` a README: odkazy, slovník názvů, žádná tajemství, úplné kroky průvodce. Potřebuje `node` a běžící stack. |
+| `scripts/check-docs.sh` | Ověří `docs/` a README: odkazy, slovník názvů, žádná tajemství, úplné kroky průvodce. Potřebuje `node` a běžící stack; `--offline` vynechá odkazy (CI). |
+| `scripts/check-config.sh` | Bez spuštění stacku: ven je publikovaný jen Vchod, Brána jen na `127.0.0.1`, Brána nabízí modely Claude. Běží v CI. |
+| `scripts/check-czech-errors.sh` | Testy českých hlášek Brány (`litellm/test_czech_errors.py`) uvnitř obrazu LiteLLM z `docker-compose.yml`, bez sítě. Běží v CI. |
+| `scripts/check-gateway.sh` | Brána tak, jak ji volá Chat, jen s Bránou a Databází: rozpočty a české hlášky. Chybějící služby spustí. Běží v CI. |
+| `scripts/check-chat-contract.sh` | Bootstrap proti Chatu bez Terminálu: najde všechna admin API, Chat nabízí modely Claude a zná svou adresu. V CI na prázdné databázi, jen když se změnilo něco, na čem to stojí. |
+| `scripts/ci-env.sh` | Vyrobí `.env` pro CI: vygenerovaná hesla, vymyšlené klíče poskytovatelů. Existující `.env` nepřepíše. |
 | `scripts/check-bootstrap-secrets.sh` | Bootstrap na čerstvém `.env` vygeneruje všechna hesla a bez `WEBUI_ADMIN_EMAIL` se zastaví. |
 | `scripts/check-first-admin.sh` | Dočasný Chat s prázdnou databází: správce z `.env` se přihlásí, registrace je zavřená. |
 | `scripts/backup.sh` | Záloha databází a souborů Chatu do `backups/<čas>/`, drží posledních 14. |
@@ -113,20 +118,35 @@ správce v Chatu a bootstrap ji nepřepisuje. Co vidí běžný uživatel: `scri
 ## Nové verze obrazů
 
 Verze obrazů v `docker-compose.yml` jsou pevné. Jednou týdně pošle Dependabot (`.github/dependabot.yml`) jeden PR
-se všemi novými verzemi; novou hlavní verzi Postgresu nenabízí, protože ta potřebuje převod dat. CI zatím
-není (#30), PR se ověří ručně:
-
-```sh
-gh pr checkout <číslo PR>
-scripts/bootstrap.sh
-scripts/smoke.sh        # samé ✓, pak merge
-git switch main
-```
+se všemi novými verzemi; novou hlavní verzi Postgresu nenabízí, protože ta potřebuje převod dat. Druhý PR
+týdně zvedá verze akcí v CI. Oba PR ověří CI (níže).
 
 Merge nic nenasadí. Na server se nová verze dostane krokem Aktualizace v průvodci (záloha → `git pull` →
 bootstrap → smoke → úklid starých obrazů). Úklid (`docker image prune -a -f`) běží jen po samých ✓, takže po
 nepovedené aktualizaci staré obrazy zůstanou. Lokálně `prune -a` nepoužívej: smazal by i obrazy jiných projektů.
 Staré obrazy tohoto projektu smaž po ověření ručně, např. `docker image rm ghcr.io/open-webui/open-terminal:0.18.6`.
+
+## CI
+
+Každý PR do `main` ověří GitHub Actions (`.github/workflows/ci.yml`) čtyřmi povinnými checky. Bez zelených
+checků merge nejde. Celý stack (`scripts/smoke.sh`) v CI neběží, jen lokálně a na serveru.
+
+| Check | Co ověří | Jak dlouho |
+|---|---|---|
+| `unit` | konfigurace bez spuštění (`check-config.sh`), hesla z bootstrapu, offline `check-docs.sh` | sekundy |
+| `czech-errors` | české hlášky Brány v obrazu LiteLLM (`check-czech-errors.sh`) | ~1 min |
+| `gateway` | Brána a Databáze: rozpočty a hlášky tak, jak je vidí Chat (`check-gateway.sh`) | ~1,5 min |
+| `chat-contract` | Chat bez Terminálu na prázdné databázi: bootstrap najde všechna admin API (`check-chat-contract.sh`). Jen když se změnilo něco, na čem stojí; jinak projde hned. | ~4 min |
+
+CI nepotřebuje žádné secrets: `scripts/ci-env.sh` vyrobí `.env` s vymyšlenými klíči poskytovatelů a nic se
+poskytovatele neptá. Ručně (ladění na Macu) totéž:
+
+```sh
+gh pr checkout <číslo PR>
+scripts/bootstrap.sh
+scripts/smoke.sh        # samé ✓
+git switch main
+```
 
 ## Nároky na server
 
