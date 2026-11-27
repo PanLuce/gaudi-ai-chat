@@ -19,6 +19,6 @@ Caddy + Open WebUI + LiteLLM + Postgres + open-terminal stack for Škola Gaudi s
 - Smoke checks that create data tag it `smoke-<timestamp>` and delete it in an EXIT trap.
 - Scripts read `.env`, which the Claude Code sandbox may not read, and `docker` needs the Docker socket: run scripts and docker commands outside the sandbox.
 - `scripts/check-docs.sh` needs the running stack (its link checks call localhost). Without it, run `scripts/check-docs.sh --offline` (no links; CI runs it this way).
-- CI (`.github/workflows/ci.yml`) runs the fast checks on every PR; `scripts/smoke.sh` keeps only what needs the whole stack. Put a new check at the lowest level that can show it.
+- CI (`.github/workflows/ci.yml`) runs the fast checks on every PR; `scripts/smoke.sh` keeps only what needs the whole stack. Put a new check at the lowest level that can show it. `main` is protected: a merge needs the four jobs `unit`, `czech-errors`, `gateway` and `chat-contract` green (set in GitHub → Settings → Branches by hand); a renamed or new job must be changed there too, or every PR waits for it forever.
 - Never print or commit secrets; `.env` is git-ignored.
 - Claude creates feature branches itself (`git switch -c <name>`, run outside the sandbox) — no manual branch step for the user.
