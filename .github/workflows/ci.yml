@@ -7,6 +7,8 @@ on:
     branches: [main]
   push:
     branches: [main]
+  # Any branch by hand, e.g. to show a check failing: gh workflow run CI --ref <branch>
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -40,3 +42,36 @@ jobs:
       - uses: actions/checkout@v4
       - run: scripts/ci-env.sh
       - run: scripts/check-gateway.sh
+
+  # Required like the others, so it always reports; the full run (~10 GB of images) only when something
+  # it covers changed. A PR that changes only docs passes it in seconds.
+  chat-contract:
+    name: chat-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: changes
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BASE" HEAD | grep -qE '^(docker-compose\.yml|caddy/|litellm/|scripts/(bootstrap|lib|test-lib|ci-env|check-chat-contract)\.sh|\.github/workflows/)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Nothing Chat's contract depends on changed; skipped."
+          fi
+      - if: steps.changes.outputs.run == 'true'
+        name: Free disk space for the images
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - if: steps.changes.outputs.run == 'true'
+        run: scripts/ci-env.sh
+      - if: steps.changes.outputs.run == 'true'
+        run: scripts/check-chat-contract.sh

@@ -42,14 +42,6 @@ check_websocket_passes_through_caddy() {
   pass "chat streaming (WebSocket) passes through Caddy"
 }
 
-# Links in e-mails and OAuth redirects are built from this address.
-check_openwebui_knows_its_public_address() {
-  local configured
-  configured=$(openwebui_admin GET /api/v1/auths/admin/config | jq -r '.WEBUI_URL')
-  [ "$configured" = "$OPENWEBUI_URL" ] || fail "Open WebUI thinks its address is $configured, expected $OPENWEBUI_URL"
-  pass "Open WebUI knows its public address $OPENWEBUI_URL"
-}
-
 # Who else may use the terminal is the admin's configuration; the admin must always have it.
 check_admin_runs_commands_in_the_terminal() {
   local terminals output
@@ -59,18 +51,6 @@ check_admin_runs_commands_in_the_terminal() {
   grep -q "smoke-terminal-ok" <<<"$output" || fail "admin cannot run a command in the terminal: $(head -c 300 <<<"$output")"
   pass "an admin runs commands in the terminal through Open WebUI"
 }
-
-
-
-check_openwebui_offers_claude_models() {
-  local offered
-  offered=$(openwebui_admin GET /api/models | jq -r '.data[].id' | grep '^claude-' | sort | xargs)
-  [ "$offered" = "$EXPECTED_TEXT_MODELS" ] || fail "Open WebUI offers [$offered], expected [$EXPECTED_TEXT_MODELS]"
-  pass "Open WebUI offers $EXPECTED_TEXT_MODELS"
-}
-
-
-
 
 # One staff account for two facts. Which models staff see is the admin's configuration; only the default
 # one must be there, otherwise nobody can chat (checked as a regular user, since admins see every model).
@@ -96,14 +76,10 @@ assert_blocked_by_budget() {
   assert_personal_budget_message "$response" "$email"
 }
 
-
-
 run_free_checks() {
   check_all_services_healthy
   check_openwebui_is_served_through_caddy
   check_websocket_passes_through_caddy
-  check_openwebui_knows_its_public_address
-  check_openwebui_offers_claude_models
   check_admin_runs_commands_in_the_terminal
   check_staff_member
 }
